@@ -76,7 +76,7 @@ registerCallHandler<
   return [true];
 });
 
-registerCallHandler<[string, string], [boolean]>("player, setTextAlign", () => {
+registerCallHandler<[string, string], [boolean]>("player.setTextAlign", () => {
   // "center" ...?
   return [true];
 });
@@ -93,7 +93,7 @@ registerCallHandler<[boolean], [boolean]>(
   }
 );
 
-registerCallHandler<[string], [boolean]>("player.setTranslateLyric", () => {
+registerCallHandler<[string], [boolean]>("player.showTranslateLyric", () => {
   // "translate" ...?
   return [true];
 });
@@ -125,7 +125,7 @@ registerCallHandler<[boolean, boolean, boolean, boolean], [boolean]>(
   }
 );
 
-registerCallHandler<[boolean], [boolean]>("player.setHorizontalLyric", () => {
+registerCallHandler<[boolean], [boolean]>("player.showHorizontalLyric", () => {
   return [true];
 });
 
