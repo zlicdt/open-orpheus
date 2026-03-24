@@ -2,5 +2,6 @@
 
 import App from "./App.cjs";
 import Menu from "./Menu.cjs";
+import { getSystemFonts } from "./module.cjs";
 
-export { App, Menu };
+export { App, Menu, getSystemFonts };

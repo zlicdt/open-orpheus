@@ -23,9 +23,6 @@ export default defineConfig({
   build: {
     rollupOptions: {
       external: [
-        // This lib dynamic imports(?), cannot be processed by Vite
-        // TODO: Throw it away
-        "font-list",
         // Native/WASM Modules
         "7z-wasm",
         "@open-orpheus/database",

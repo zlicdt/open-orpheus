@@ -11,6 +11,7 @@ declare module "./load.cjs" {
   }): [number, number];
   function destroyApp(appPtr: number, checkPtr: number): void;
   function loadMenuSkin(appPtr: number, path: string): Promise<void>;
+
   function createWindow(appPtr: number): number;
   // TODO: Types
   function destroyMenu(menuPtr: number): void;
@@ -21,6 +22,8 @@ declare module "./load.cjs" {
     callback: (id: string) => void
   ): void;
   function updateMenuItem(menuPtr: number, item: unknown): void;
+
+  function getSystemFonts(): string[];
 }
 
 export = addon;

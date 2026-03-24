@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 
 import { BrowserWindow, powerSaveBlocker, screen, shell } from "electron";
-import { getFonts } from "font-list";
+
+import { getSystemFonts } from "@open-orpheus/ui";
 
 import { sanitizeRelativePath } from "../util";
 import { registerCallHandler } from "../calls";
@@ -68,14 +69,14 @@ registerCallHandler<[string], [unknown]>("os.getSystemInfo", (event_, kind) => {
 
 registerCallHandler<string[], [string, string[]]>(
   "os.checkNativeSupportFonts",
-  async (event, ...fonts) => {
-    const systemFonts = await getFonts();
+  (event, ...fonts) => {
+    const systemFonts = getSystemFonts();
     return ["success", fonts.filter((font) => systemFonts.includes(font))];
   }
 );
 
-registerCallHandler<[], [string, string[]]>("os.querySystemFonts", async () => {
-  return ["success", await getFonts()];
+registerCallHandler<[], [string, string[]]>("os.querySystemFonts", () => {
+  return ["success", getSystemFonts()];
 });
 
 registerCallHandler<[string], void>("os.navigateExternal", (event, url) => {
