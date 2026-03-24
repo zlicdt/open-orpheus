@@ -30,7 +30,7 @@ export default defineConfig({
         "7z-wasm",
         "@open-orpheus/database",
         "@open-orpheus/window",
-        "@open-orpheus/ui"
+        "@open-orpheus/ui",
       ],
     },
   },
