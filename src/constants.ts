@@ -1,3 +1,4 @@
+// MUST: Update BUILD and VERSION when changing target web pack version.
 export const BUILD = "205117";
 export const VERSION = "3.1.29";
 export const CORE_VERSION = `${VERSION}.${BUILD}`;

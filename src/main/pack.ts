@@ -7,7 +7,6 @@ import SevenZip from "7z-wasm";
 import { pack as base } from "./folders";
 import WebPack from "./packs/WebPack";
 import SkinPack from "./packs/SkinPack";
-//import { fetchUpgradeInfo } from "./update";
 
 function chooseWebPackFile() {
   const webPack = resolve(base, "web.pack");
@@ -61,17 +60,7 @@ export async function downloadPackage(
 ) {
   const files = ["common.skin", "dark.skin", "native.ntpk", "orpheus.ntpk"];
 
-  /*const upgradeInfo = await fetchUpgradeInfo();
-  if (upgradeInfo.code !== 200) {
-    throw new Error(`Failed to fetch upgrade info: ${upgradeInfo.message}`);
-  }
-  const downloadUrl = upgradeInfo.data.packageVO.downloadUrl;
-  */
-  // TODO: NetEase doesn't seem to willing to return download url, hardcode it for now
-  // https://d8.music.126.net/dmusic2/NeteaseCloudMusic_Music_official_3.1.29.205117_64.exe
-
-  // TODO: Actually, maybe we should use fixed URL, since we are only targeting one specific version at a time.
-
+  /* MUST: Update package download URL when changing target web pack version. */
   const downloadUrl =
     "https://d8.music.126.net/dmusic2/NeteaseCloudMusic_Music_official_3.1.29.205117_64.exe";
 
