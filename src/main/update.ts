@@ -1,5 +1,5 @@
 import { session } from "electron";
-import { BUILD, CORE_VERSION, MD5, OSVER, VERSION } from "../constants";
+import { CORE_VERSION, OSVER } from "../constants";
 import { deserialData, serialData } from "./crypto";
 import { getADDeviceId, getDeviceId } from "./device";
 
@@ -17,8 +17,8 @@ interface UpgradeInfo {
     code: number;
     md5: string;
     downloadUrl: string;
-    incrementalDownloadUrl?: string;
-    incrementalMd5?: string;
+    incrementalDownloadUrl: string | null;
+    incrementalMd5: string | null;
     grayPolicyId: number;
   };
   abGroupInfo: string;
@@ -39,11 +39,11 @@ export async function fetchUpgradeInfo(): Promise<{
       action: "manual",
       cpuBitWidth: "64",
       patch: JSON.stringify({
-        mainver: VERSION,
-        buildver: BUILD,
+        mainver: "",
+        buildver: "",
         isIncremental: true,
-        md5: MD5.toLowerCase(),
-      }),
+        md5: "",
+      }), // Empty patch gives us no incremental pack
       e_r: true,
       header: JSON.stringify({
         clientSign: getADDeviceId(),

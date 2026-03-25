@@ -1,7 +1,6 @@
 import {
   BUILD,
   CORE_VERSION,
-  MD5,
   NATIVE_VERSION,
   VERSION,
 } from "../../constants";
@@ -33,16 +32,19 @@ registerCallHandler<[], [typeof visualVersion]>(
   }
 );
 
+// Maybe we don't need this in the future
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const cachedInstallPackageVersion = {
   buildVer: BUILD,
   mainVer: VERSION,
-  md5: MD5,
+  md5: "B3025C21309C614E088032A206DFFF01",
   path: "C:\\Users\\steamuser\\AppData\\Local\\NetEase\\CloudMusic\\update\\orpheus_install.exe",
   version: CORE_VERSION,
 };
-registerCallHandler<[], [typeof cachedInstallPackageVersion]>(
+registerCallHandler<[], (typeof cachedInstallPackageVersion)[]>(
   "update.getCachedInstallPackageVersion",
   () => {
-    return [cachedInstallPackageVersion];
+    // We are not interested in incremental update pack, return empty.
+    return [];
   }
 );

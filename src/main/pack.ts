@@ -69,7 +69,6 @@ export async function downloadPackage(
   */
   // TODO: NetEase doesn't seem to willing to return download url, hardcode it for now
   // https://d8.music.126.net/dmusic2/NeteaseCloudMusic_Music_official_3.1.29.205117_64.exe
-  // https://d8.music.126.net/dmusic2/NeteaseCloudMusic_Music_BS_84539_3.1.28.205001_3.1.29.205117_netease_64.exe
 
   // TODO: Actually, maybe we should use fixed URL, since we are only targeting one specific version at a time.
 
