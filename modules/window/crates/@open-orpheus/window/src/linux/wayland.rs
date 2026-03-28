@@ -689,16 +689,17 @@ extern "C" fn hook_connect(fd: c_int, addr: *const c_void, addrlen: u32) -> c_in
             // If replacing a previous connection, reset tracking state and
             // clean up the old fd's reassembly buffers.
             if let Some(old) = old_fd
-                && old != fd {
-                    drop(opt);
-                    reset_tracking_state();
-                    if let Some(m) = RX_BUFS.get() {
-                        let _ = m.lock().map(|mut g| g.remove(&old));
-                    }
-                    if let Some(m) = TX_BUFS.get() {
-                        let _ = m.lock().map(|mut g| g.remove(&old));
-                    }
+                && old != fd
+            {
+                drop(opt);
+                reset_tracking_state();
+                if let Some(m) = RX_BUFS.get() {
+                    let _ = m.lock().map(|mut g| g.remove(&old));
                 }
+                if let Some(m) = TX_BUFS.get() {
+                    let _ = m.lock().map(|mut g| g.remove(&old));
+                }
+            }
         }
     }
     ret
