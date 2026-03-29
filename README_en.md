@@ -65,3 +65,14 @@ If the automatic download fails, you can manually copy the entire `package` fold
 An updated web resource pack produced by the official NetEase Cloud Music client, found at `C:\Users\<YOUR_USERNAME>\AppData\Local\NetEase\CloudMusic\web.pack`. Copy it into the `package` folder alongside `orpheus.ntpk`. If present, Open Orpheus will prefer it over `orpheus.ntpk`.
 
 It is generally not recommended to use a too-recent web resource pack, as it may cause compatibility issues.
+
+## Disclaimer
+
+Open Orpheus is an independent open-source project aimed at **interoperability**. It is not affiliated with, authorized by, or endorsed by NetEase in any way.
+
+- **This project does not include or distribute any assets or code owned by NetEase.** Required resources such as `orpheus.ntpk` are the property of NetEase. Users must obtain them from a legally acquired official client installation, or allow the application to download them automatically from NetEase's official CDN on first launch.
+- **This project does not provide, encourage, or support any functionality or modification intended to bypass advertisements, paid content, membership benefits, or digital rights management (DRM) mechanisms.** Any such use is explicitly outside the scope of this project and will be actively rejected.
+- By using this project, you remain bound by the [NetEase Cloud Music Terms of Service](https://st.music.163.com/official-terms/service) and all applicable laws and regulations.
+- This project is provided "as is". The maintainers accept no responsibility for any consequences arising from its use, including but not limited to account suspension, service disruption, or legal liability.
+
+> "NetEase Cloud Music", "Orpheus", and related trademarks are the property of NetEase, Inc.
