@@ -15,6 +15,9 @@ import registerOrpheusScheme from "./main/orpheus";
 import "./main/channel";
 
 import { bindMainWindow as trayBindMainWindow } from "./main/tray";
+import createDesktopLyricsWindow, {
+  bindMainWindow as lyricsBindMainWindow,
+} from "./main/desktopLyrics";
 import { getWindowSizeStatus } from "./main/util";
 import { loadFromFile as loadCookiesFromFile } from "./main/cookie";
 import { data as dataDir, userdata as userdataDir } from "./main/folders";
@@ -25,7 +28,6 @@ import { initializeDatabases } from "./main/database";
 import { loadWebPack, webPack } from "./main/pack";
 import { createApp } from "./main/ui";
 import { openPackageDownloadWindow } from "./main/gui";
-import createDesktopLyricsWindow from "./main/desktopLyrics";
 
 // This is flags is required because package window is shown before main window, and we don't want to quit the app when package window is closed for any reason.
 let appStarted = false;
@@ -54,6 +56,7 @@ const createWindow = () => {
   mainWindow.loadURL("orpheus://orpheus/pub/app.html");
 
   trayBindMainWindow(mainWindow);
+  lyricsBindMainWindow(mainWindow);
 
   [
     "maximize",

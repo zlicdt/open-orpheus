@@ -2,4 +2,5 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
 import "./preload/channel";
+import "./preload/desktopLyrics";
 import "./preload/miniprogram";
