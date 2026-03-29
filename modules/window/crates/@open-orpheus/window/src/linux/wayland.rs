@@ -176,7 +176,7 @@ fn parse_header(buf: &[u8]) -> Option<(u32, u16, usize)> {
     let op = (word & 0xFFFF) as u16;
     let sz = (word >> 16) as usize;
     // Wayland wire sizes are always 4-byte aligned and at least 8 (header).
-    if sz < 8 || sz % 4 != 0 {
+    if sz < 8 || !sz.is_multiple_of(4) {
         return None;
     }
     Some((oid, op, sz))
