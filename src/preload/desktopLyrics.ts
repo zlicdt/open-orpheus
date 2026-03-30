@@ -6,7 +6,7 @@ import type { LyricStyle } from "./Player";
 player.addEventListener("lyriccontentupdate", (e) => {
   const content = (e as CustomEvent).detail;
   if (content) {
-    ipcRenderer.invoke("desktopLyrics.updateLyrics", content.lrc, content.tlrc);
+    ipcRenderer.invoke("desktopLyrics.updateLyrics", content.lrc, player.lyricStyle.showTranslate === "translate" ? content.tlrc : content.romalrc);
   } else {
     ipcRenderer.invoke("desktopLyrics.updateLyrics", null, null);
   }
@@ -60,6 +60,10 @@ const styleKeyMap: Partial<Record<keyof LyricStyle, (value: never) => void>> = {
     }),
   showHorizontal: (v: boolean) =>
     ipcRenderer.invoke("desktopLyrics.updateStyle", { vertical: !v }),
+  showTranslate: () => {
+    // eslint-disable-next-line no-self-assign
+    player.lyricContent = player.lyricContent; // Trigger re-send of lyrics with correct tlrc/romalrc based on showTranslate
+  },
   offset: (v) => ipcRenderer.invoke("desktopLyrics.updateStyle", { offset: v }),
   slogan: (v) => ipcRenderer.invoke("desktopLyrics.updateStyle", { slogan: v }),
   desktopTopMost: (v) => ipcRenderer.invoke("desktopLyrics.setTopMost", v),

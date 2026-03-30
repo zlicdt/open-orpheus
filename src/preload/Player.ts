@@ -46,7 +46,7 @@ export type LyricStyle = {
   // Display
   textAlign: [TextAlignType, TextAlignType];
   lineMode: boolean;
-  showTranslate: string;
+  showTranslate: "translate" | "roman";
   showHorizontal: boolean;
   offset: number;
   slogan: string;
@@ -138,7 +138,7 @@ export default class Player extends EventTarget {
     fontSize: 36,
     textAlign: ["center", "center"],
     lineMode: false,
-    showTranslate: "",
+    showTranslate: "translate",
     showHorizontal: false,
     offset: 0,
     slogan: "",

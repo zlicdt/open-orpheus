@@ -104,7 +104,8 @@ registerCallHandler<[boolean], [boolean]>(
   }
 );
 
-registerCallHandler<[string], [boolean]>("player.showTranslateLyric", () => {
+registerCallHandler<["translate" | "roman"], [boolean]>("player.showTranslateLyric", (mode) => {
+  player.lyricStyle.showTranslate = mode;
   return [true];
 });
 
