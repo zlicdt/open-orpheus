@@ -1,6 +1,14 @@
-import { app, BrowserWindow, dialog, screen, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  protocol,
+  screen,
+  session,
+} from "electron";
 import path from "node:path";
 import os from "node:os";
+import { mkdir } from "node:fs/promises";
 import started from "electron-squirrel-startup";
 
 import { isWayland } from "@open-orpheus/window";
@@ -23,11 +31,10 @@ import { loadFromFile as loadCookiesFromFile } from "./main/cookie";
 import { data as dataDir, userdata as userdataDir } from "./main/folders";
 import { prepareDeviceId } from "./main/device";
 import { CORE_VERSION } from "./constants";
-import { mkdir } from "node:fs/promises";
 import { initializeDatabases } from "./main/database";
 import { loadWebPack, webPack } from "./main/pack";
 import { createApp } from "./main/ui";
-import { openPackageDownloadWindow } from "./main/gui";
+import registerGuiScheme, { openPackageDownloadWindow } from "./main/gui";
 
 // This is flags is required because package window is shown before main window, and we don't want to quit the app when package window is closed for any reason.
 let appStarted = false;
@@ -37,6 +44,27 @@ let quitting = false;
 if (started) {
   app.quit();
 }
+
+// Register privileged schemes
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "orpheus",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+    },
+  },
+  {
+    scheme: "gui",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+]);
 
 app.setPath("userData", userdataDir);
 
@@ -123,6 +151,7 @@ app.on("ready", async () => {
     await mkdir(path.join(dataDir), { recursive: true });
 
     registerOrpheusScheme();
+    registerGuiScheme();
 
     const defaultUserAgent = session.defaultSession.getUserAgent();
     session.defaultSession.setUserAgent(

@@ -1,15 +1,19 @@
 <script lang="ts">
+  import type { HTMLAttributes } from "svelte/elements";
+
   import type { LyricsData, LyricLine, LyricStyleConfig } from "$lib/types";
 
   let {
     lyricsData,
     currentTime = 0,
-    style,
+    lyricStyle: style,
+    class: className,
+    ...rest
   }: {
     lyricsData: LyricsData | null;
     currentTime: number;
-    style: LyricStyleConfig;
-  } = $props();
+    lyricStyle: LyricStyleConfig;
+  } & HTMLAttributes<HTMLDivElement> = $props();
 
   // Binary search for the current line index
   function findCurrentLineIndex(lines: LyricLine[], time: number): number {
@@ -261,10 +265,11 @@
 
 {#if lyricsData && (primaryLine || secondaryLine || style.slogan)}
   <div
-    class="flex h-full w-full justify-center gap-1 overflow-hidden {style.vertical
+    class="flex justify-center gap-1 overflow-hidden p-2 {style.vertical
       ? 'flex-row-reverse'
-      : 'flex-col'}"
+      : 'flex-col'} {className}"
     bind:this={containerEl}
+    {...rest}
   >
     {#if primaryLine}
       <div
@@ -304,7 +309,6 @@
                   : `${(1 - primaryProgress) * 100}%`} {style.vertical
                   ? `${(1 - primaryProgress) * 100}%`
                   : '0'} 0);
-                  {shadowStyle}
                 "
               >
                 {primaryLine.words.map((w) => w.text).join("")}
@@ -336,7 +340,6 @@
                 : `${(1 - primaryProgress) * 100}%`} {style.vertical
                 ? `${(1 - primaryProgress) * 100}%`
                 : '0'} 0);
-                {shadowStyle}
               "
             >
               {primaryLine.words.map((w) => w.text).join("")}
@@ -423,7 +426,6 @@
                   : `${(1 - secondaryProgress) * 100}%`} {style.vertical
                   ? `${(1 - secondaryProgress) * 100}%`
                   : '0'} 0);
-                  {shadowStyle}
                 "
               >
                 {secondaryLine.words.map((w) => w.text).join("")}
@@ -454,7 +456,6 @@
                 : `${(1 - secondaryProgress) * 100}%`} {style.vertical
                 ? `${(1 - secondaryProgress) * 100}%`
                 : '0'} 0);
-                {shadowStyle}
               "
             >
               {secondaryLine.words.map((w) => w.text).join("")}

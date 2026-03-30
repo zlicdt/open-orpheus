@@ -22,6 +22,7 @@ function chooseWebPackFile() {
 
 export let webPack: WebPack | null = null;
 export let skinPack: SkinPack | null = null;
+let skinPackWaiterResolvers: (() => void)[] = [];
 
 export type DownloadPackageProgress = {
   step: "downloading" | "extracting" | "saving" | "completed";
@@ -46,6 +47,10 @@ export async function loadSkinPack(name: string) {
   }
   skinPack = new SkinPack(skinPackPath);
   await skinPack.readPack();
+  for (const resolver of skinPackWaiterResolvers) {
+    resolver();
+  }
+  skinPackWaiterResolvers = [];
 }
 
 export function getSkinPack() {
@@ -53,6 +58,17 @@ export function getSkinPack() {
     throw new Error("Skin pack not loaded");
   }
   return skinPack;
+}
+
+export async function getOrWaitSkinPack() {
+  if (skinPack) {
+    return skinPack;
+  }
+  return await new Promise<SkinPack>((resolve) => {
+    skinPackWaiterResolvers.push(() => {
+      resolve(skinPack);
+    });
+  });
 }
 
 export async function downloadPackage(

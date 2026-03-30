@@ -29,4 +29,7 @@ contextBridge.exposeInMainWorld("desktopLyrics", {
   dragWindow() {
     ipcRenderer.invoke("channel.call", "winhelper.dragWindow");
   },
+  performAction(action: string) {
+    ipcRenderer.invoke("desktopLyrics.performAction", action);
+  },
 });

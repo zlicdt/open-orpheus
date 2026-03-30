@@ -3,13 +3,6 @@ import mime from "mime";
 import { extname } from "node:path";
 import { webPack } from "./pack";
 
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: "orpheus",
-    privileges: { secure: true, standard: true, supportFetchAPI: true },
-  },
-]);
-
 class NetworkError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);

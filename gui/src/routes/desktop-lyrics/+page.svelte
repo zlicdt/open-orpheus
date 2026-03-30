@@ -2,10 +2,23 @@
   import { onMount } from "svelte";
   import Lyrics from "$lib/components/Lyrics.svelte";
   import type { LyricsData, LyricStyleConfig } from "$lib/types";
+  import IconButton from "$lib/components/IconButton.svelte";
 
   let lyricsData: LyricsData | null = $state(null);
   let currentTime = $state(0);
   let playing = $state(false);
+
+  const items: ([string, string] | [string, string, true])[] = $derived([
+    ["home", "detail"],
+    ["poffset", "offset_forward"], // TODO: In what situations offsets will be locked
+    ["moffset", "offset_back"],
+    ["prev", "playprev"],
+    [playing ? "topause" : "toplay", "play_pause"],
+    ["next", "playnext"],
+    ["setting", "setting"],
+    ["lock", "lock"],
+    ["close", "close"],
+  ]);
 
   const defaultStyle: LyricStyleConfig = {
     fontFamily: "sans-serif",
@@ -101,8 +114,39 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="flex h-screen w-screen cursor-grab items-center justify-center rounded-lg hover:bg-black/40"
+  class="group flex h-screen w-screen cursor-grab items-center justify-evenly rounded-lg p-2 hover:bg-black/40 overflow-hidden{lyricStyle.vertical
+    ? ''
+    : ' flex-col'}"
   onmousedown={onDrag}
 >
-  <Lyrics {lyricsData} {currentTime} style={lyricStyle} />
+  <div
+    class="flex justify-center gap-2 group-hover:visible invisible{lyricStyle.vertical
+      ? ' flex-col'
+      : ''}"
+  >
+    {#each items as [icon, action, disabled]}
+      <IconButton
+        normal={`gui://skin/lrc/${icon}_normal.svg`}
+        hover={`gui://skin/lrc/${icon}_over.svg`}
+        active={`gui://skin/lrc/${icon}_push.svg`}
+        disabled={disabled ? `gui://skin/lrc/${icon}_dis.svg` : undefined}
+        onmousedown={(e) => {
+          e.stopPropagation();
+        }}
+        onclick={() => {
+          const api = (window as any).desktopLyrics;
+          api?.performAction(action);
+        }}
+        class="cursor-pointer"
+        imgClass="size-6"
+      />
+    {/each}
+  </div>
+  <!-- svelte-ignore attribute_quoted -->
+  <Lyrics
+    {lyricsData}
+    {currentTime}
+    {lyricStyle}
+    class={lyricStyle.vertical ? "h-full" : "w-full"}
+  />
 </div>

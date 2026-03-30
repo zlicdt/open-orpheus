@@ -47,6 +47,19 @@ export default function createDesktopLyricsWindow() {
       }
     }
   );
+
+  desktopLyricsWindow.webContents.ipc.handle(
+    "desktopLyrics.performAction",
+    (_event, action: string) => {
+      if (mainWnd && !mainWnd.isDestroyed()) {
+        mainWnd.webContents.send(
+          "channel.call",
+          "player.ondesktoplyricaction",
+          action
+        );
+      }
+    }
+  );
 }
 
 // --- IPC handlers ---
