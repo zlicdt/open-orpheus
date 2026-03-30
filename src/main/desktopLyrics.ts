@@ -1,8 +1,11 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { BrowserWindow, ipcMain } from "electron";
 import { setWindowId } from "./window";
 import { parseLrc } from "./lyrics";
+import { sanitizeRelativePath } from "./util";
+import { storage } from "./folders";
+import { mkdir, writeFile } from "node:fs/promises";
 
 let desktopLyricsWindow: BrowserWindow | null = null;
 let mainWnd: BrowserWindow | null = null;
@@ -115,3 +118,84 @@ ipcMain.handle("desktopLyrics.setTopMost", (_event, topMost: boolean) => {
     desktopLyricsWindow.setAlwaysOnTop(topMost);
   }
 });
+
+ipcMain.handle(
+  "desktopLyrics.renderPreview",
+  async (
+    _event,
+    style: Record<string, unknown>,
+    text: string,
+    path: string
+  ) => {
+    const filePath = sanitizeRelativePath(storage, path);
+    if (filePath === false) {
+      console.warn(
+        "Attempted to save desktop lyrics preview to invalid path:",
+        path
+      );
+      return;
+    }
+    const [buf, size] = await createDesktopLyricsPreview(style, text);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, buf);
+    return size;
+  }
+);
+
+// --- Preview ---
+
+export async function createDesktopLyricsPreview(
+  style: Record<string, unknown>,
+  text: string
+): Promise<[Buffer, [number, number]]> {
+  const vertical = !!style.vertical;
+  const [width, height] = vertical ? [124, 310] : [310, 124];
+
+  const previewWindow = new BrowserWindow({
+    width,
+    height,
+    show: false,
+    transparent: true,
+    hasShadow: false,
+    frame: false,
+    resizable: false,
+    webPreferences: {
+      offscreen: true,
+      partition: "open-orpheus",
+      preload: join(__dirname, "desktop-lyrics-preview.js"),
+    },
+  });
+
+  if (GUI_VITE_DEV_SERVER_URL) {
+    previewWindow.loadURL(`${GUI_VITE_DEV_SERVER_URL}/desktop-lyrics-preview`);
+  } else {
+    previewWindow.loadFile(join(__dirname, "gui/desktop-lyrics-preview.html"));
+  }
+
+  return new Promise<[Buffer, [number, number]]>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      if (!previewWindow.isDestroyed()) previewWindow.close();
+      reject(new Error("Preview generation timed out"));
+    }, 10000);
+
+    previewWindow.webContents.ipc.handle(
+      "desktopLyricsPreview.requestInit",
+      () => ({ style, text })
+    );
+
+    previewWindow.webContents.ipc.handle(
+      "desktopLyricsPreview.ready",
+      async () => {
+        clearTimeout(timeout);
+        try {
+          const image = await previewWindow.webContents.capturePage();
+          resolve([image.toPNG(), [width, height]]);
+        } catch (err) {
+          reject(err);
+        } finally {
+          setImmediate(() => previewWindow.close());
+        }
+      }
+    );
+  });
+}

@@ -2,6 +2,9 @@ import { protocol } from "electron";
 import mime from "mime";
 import { extname } from "node:path";
 import { webPack } from "./pack";
+import { sanitizeRelativePath } from "./util";
+import { storage as storageDir } from "./folders";
+import { readFile } from "node:fs/promises";
 
 class NetworkError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -34,7 +37,11 @@ async function loadFromFilePath(
 
 export async function loadFromOrpheusUrl(
   url: string
-): Promise<{ content: Buffer<ArrayBuffer>; contentType: string }> {
+): Promise<{
+  content: Buffer<ArrayBuffer>;
+  contentType: string;
+  cacheable?: boolean;
+}> {
   const parsedUrl = new URL(url);
   if (parsedUrl.protocol !== "orpheus:") {
     throw new NetworkError(`Invalid URL protocol: ${parsedUrl.protocol}`);
@@ -42,6 +49,22 @@ export async function loadFromOrpheusUrl(
 
   switch (parsedUrl.hostname) {
     case "orpheus":
+      if (parsedUrl.pathname === "/storage/local") {
+        const path = parsedUrl.searchParams.get("file");
+        if (!path) {
+          throw new LoadError("Bad Request: Missing file parameter", 400);
+        }
+        const filePath = sanitizeRelativePath(storageDir, path);
+        if (filePath === false) {
+          throw new LoadError("Bad Request: Invalid file path", 400);
+        }
+        return {
+          content: await readFile(filePath),
+          contentType:
+            mime.getType(extname(filePath)) || "application/octet-stream",
+          cacheable: false,
+        };
+      }
       return await loadFromFilePath(parsedUrl.pathname);
     case "cache": {
       const url = parsedUrl.search.substring(1); // remove leading '?'
@@ -74,9 +97,14 @@ export async function loadFromOrpheusUrl(
 export default function () {
   protocol.handle("orpheus", async (request) => {
     try {
-      const { content, contentType } = await loadFromOrpheusUrl(request.url);
+      const { content, contentType, cacheable } = await loadFromOrpheusUrl(
+        request.url
+      );
       return new Response(content, {
-        headers: { "Content-Type": contentType },
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": cacheable ? undefined : "no-store",
+        },
       });
     } catch (error) {
       if (error instanceof LoadError) {

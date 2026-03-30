@@ -1,6 +1,9 @@
 import { player } from "../audioplayer";
 import type { TextAlignType } from "../Player";
 import { registerCallHandler } from "../calls";
+import { ipcRenderer } from "electron";
+import { transformLyricStyle } from "../desktopLyrics";
+import { fireNativeCall } from "../channel";
 
 let currentMetadata: MediaMetadata | null = null;
 
@@ -104,10 +107,13 @@ registerCallHandler<[boolean], [boolean]>(
   }
 );
 
-registerCallHandler<["translate" | "roman"], [boolean]>("player.showTranslateLyric", (mode) => {
-  player.lyricStyle.showTranslate = mode;
-  return [true];
-});
+registerCallHandler<["translate" | "roman"], [boolean]>(
+  "player.showTranslateLyric",
+  (mode) => {
+    player.lyricStyle.showTranslate = mode;
+    return [true];
+  }
+);
 
 registerCallHandler<[string, string, string, string], [boolean]>(
   "player.setLRCColor",
@@ -188,6 +194,20 @@ registerCallHandler<[number], [boolean]>("player.setOffset", (offset) => {
   player.lyricStyle.offset = offset;
   return [true];
 });
+
+registerCallHandler<[string, string], [boolean]>(
+  "player.renderLRCImage",
+  async (text, path) => {
+    const [width, height] = await ipcRenderer.invoke(
+      "desktopLyrics.renderPreview",
+      transformLyricStyle(player.lyricStyle),
+      text,
+      path
+    );
+    fireNativeCall("player.onRenderLRCImageResult", path, true, width, height);
+    return [true];
+  }
+);
 
 registerCallHandler<[string, number], [boolean]>("player.setFont", () => {
   // What font is this?

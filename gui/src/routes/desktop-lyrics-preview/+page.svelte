@@ -1,0 +1,105 @@
+<script lang="ts">
+  import { onMount, tick } from "svelte";
+  import Lyrics from "$lib/components/Lyrics.svelte";
+  import type { LyricsData, LyricStyleConfig } from "$lib/types";
+
+  function buildLyricsData(text: string): LyricsData {
+    return {
+      lines: [
+        {
+          start_time: 0,
+          end_time: 10000,
+          words: [{ text, start_time: 0, duration: 10000 }],
+        },
+        {
+          start_time: 20000,
+          end_time: 30000,
+          words: [{ text, start_time: 0, duration: 10000 }],
+        },
+      ],
+    };
+  }
+
+  let lyricsData: LyricsData = $state(buildLyricsData("Preview"));
+
+  const defaultStyle: LyricStyleConfig = {
+    fontFamily: "sans-serif",
+    fontSize: 36,
+    fontWeight: "normal",
+    textAlign: ["center", "center"],
+    lineMode: false,
+    vertical: false,
+    colorNotPlayedTop: "#ffffff",
+    colorNotPlayedBottom: "#cccccc",
+    colorPlayedTop: "#00ff88",
+    colorPlayedBottom: "#00cc66",
+    outlineColorNotPlayed: "transparent",
+    outlineColorPlayed: "transparent",
+    dropShadow: "0 2px 4px rgba(0,0,0,0.5)",
+    showProgress: true,
+    offset: 0,
+    slogan: "",
+  };
+
+  let lyricStyle: LyricStyleConfig = $state({ ...defaultStyle });
+
+  // Double-line: line 0 fully played (time=10000), line 1 unplayed
+  // Single-line: line 0 half played (time=5000)
+  let currentTime = $derived(lyricStyle.lineMode ? 5000 : 10000);
+
+  let lyricsEl: HTMLDivElement | undefined = $state();
+  let calculatingScale = $state(false);
+  let scale = $state(1);
+
+  function fitScale() {
+    if (!lyricsEl) return;
+    // Reset scale to measure natural size
+    // TODO: Better scaling strategy
+    calculatingScale = true;
+    scale = 1;
+    requestAnimationFrame(() => {
+      if (!lyricsEl) return;
+      const sw = window.innerWidth / lyricsEl.scrollWidth;
+      const sh = window.innerHeight / lyricsEl.scrollHeight;
+      calculatingScale = false;
+      scale = Math.min(sw, sh);
+    });
+  }
+
+  onMount(async () => {
+    const api = (window as any).desktopLyricsPreview;
+    if (!api) return;
+
+    const { style, text } = await api.requestInit();
+    lyricsData = buildLyricsData(text);
+    lyricStyle = {
+      ...lyricStyle,
+      ...style,
+      offset: 0,
+      showProgress: true,
+      slogan: "",
+    };
+    await tick();
+    fitScale();
+    // Wait for scale to apply + repaint before signaling ready
+    await tick();
+    setTimeout(() => api.ready(), 50);
+  });
+</script>
+
+<div
+  class="fixed inset-0 flex h-screen w-screen {lyricStyle.vertical &&
+  !calculatingScale
+    ? 'items-start'
+    : 'items-center'} justify-center overflow-hidden"
+>
+  <div
+    bind:this={lyricsEl}
+    style="transform: scale({scale}); transform-origin: {lyricStyle.vertical &&
+    !calculatingScale
+      ? 'top'
+      : 'center center'};"
+  >
+    <Lyrics {lyricsData} {currentTime} {lyricStyle} />
+  </div>
+</div>

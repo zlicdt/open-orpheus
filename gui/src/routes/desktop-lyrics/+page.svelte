@@ -67,7 +67,7 @@
   }
 
   // svelte-ignore state_referenced_locally -- we need this to trigger updates when vertical changes
-let previousVertical = lyricStyle.vertical;
+  let previousVertical = lyricStyle.vertical;
   $effect(() => {
     if (lyricStyle.vertical !== previousVertical) {
       previousVertical = lyricStyle.vertical;
