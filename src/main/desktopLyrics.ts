@@ -32,6 +32,7 @@ export default function createDesktopLyricsWindow() {
     frame: false,
     resizable: true,
     show: false,
+    title: "Open Orpheus Lyrics",
     webPreferences: {
       partition: "open-orpheus",
       preload: join(__dirname, "desktop-lyrics.js"),

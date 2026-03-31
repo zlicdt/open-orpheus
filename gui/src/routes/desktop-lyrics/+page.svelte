@@ -122,10 +122,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Open Orpheus Lyrics</title>
-</svelte:head>
-
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="group flex h-screen w-screen cursor-grab items-center justify-evenly overflow-hidden rounded-lg p-2 hover:bg-black/40 select-none{lyricStyle.vertical
