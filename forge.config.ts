@@ -11,7 +11,9 @@ import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-nati
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: "**/*.so*",
+    },
     derefSymlinks: true, // TODO: Remove in Electron Forge 8
     // Override Vite Plugin's preferences, and with our preferences
     ignore: (file: string) => {
