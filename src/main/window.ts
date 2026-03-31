@@ -1,7 +1,8 @@
-import { app, BrowserWindow, session, shell } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import { Menu } from "@open-orpheus/ui";
 
 type WindowProperties = {
+  id?: string;
   maximumSize?: { x: number; y: number };
   minimumSize?: { x: number; y: number };
   menus: Map<number, Menu>;
@@ -35,10 +36,6 @@ function disableSizeConstraints(wnd: BrowserWindow) {
 }
 
 app.on("browser-window-created", (event, wnd) => {
-  if (wnd.webContents.session == session.fromPartition("open-orpheus")) {
-    return; // Manage internal windows separately.
-  }
-
   windowProperties.set(wnd.id, {
     menus: new Map(),
     customProps: {},
@@ -70,6 +67,28 @@ app.on("browser-window-created", (event, wnd) => {
     return { action: "deny" };
   });
 });
+
+// Web pack identify windows by a custom string id.
+export function setWindowId(wnd: BrowserWindow, id: string) {
+  const props = windowProperties.get(wnd.id);
+  if (props) {
+    props.id = id;
+  }
+}
+
+export function getWindowId(wnd: BrowserWindow): string | undefined {
+  const props = windowProperties.get(wnd.id);
+  return props ? props.id : undefined;
+}
+
+export function getWindowById(id: string): BrowserWindow | undefined {
+  for (const [wndId, props] of windowProperties.entries()) {
+    if (props.id === id) {
+      return BrowserWindow.fromId(wndId);
+    }
+  }
+  return undefined;
+}
 
 export function setMaximumSize(wnd: BrowserWindow, x: number, y: number) {
   if (shouldRespectSizeConstraints(wnd)) {

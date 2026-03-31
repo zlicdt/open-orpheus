@@ -25,6 +25,7 @@ export default defineConfig({
       external: [
         // Native/WASM Modules
         "7z-wasm",
+        "sharp",
         "@open-orpheus/database",
         "@open-orpheus/window",
         "@open-orpheus/ui",

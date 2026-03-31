@@ -8,7 +8,7 @@ import { Menu } from "@open-orpheus/ui";
 import { registerCallHandler } from "../calls";
 import { loadFromOrpheusUrl } from "../orpheus";
 import { getWindowScaleFactor, pngFromIco } from "../util";
-import { getMenus, setMaximumSize, setMinimumSize } from "../window";
+import { getMenus, getWindowById, setMaximumSize, setMinimumSize } from "../window";
 import { AppMenuItem } from "../menu";
 import { getApp } from "../ui";
 
@@ -162,11 +162,16 @@ registerCallHandler<
     },
   ],
   void
->("winhelper.setNativeWindowShow", () => {
-  // Params:
-  // - id: string
-  // - show: boolean
-  // - rect
+>("winhelper.setNativeWindowShow", (event, id, show /*, workArea*/) => {
+  if (!id) return;
+  const wnd = getWindowById(id);
+  if (!wnd) return;
+  if (show) {
+    wnd.show();
+    wnd.focus();
+  } else {
+    wnd.hide();
+  }
   return;
 });
 
