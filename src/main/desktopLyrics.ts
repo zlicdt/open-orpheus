@@ -192,9 +192,12 @@ export async function createDesktopLyricsPreview(
         clearTimeout(timeout);
         try {
           const image = await previewWindow.webContents.capturePage();
-          resolve([Buffer.from(await sharp(image.toPNG())
-            .resize(width, height)
-            .toBuffer()), [width, height]]);
+          resolve([
+            Buffer.from(
+              await sharp(image.toPNG()).resize(width, height).toBuffer()
+            ),
+            [width, height],
+          ]);
         } catch (err) {
           reject(err);
         } finally {

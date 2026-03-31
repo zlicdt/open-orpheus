@@ -35,9 +35,7 @@ async function loadFromFilePath(
   }
 }
 
-export async function loadFromOrpheusUrl(
-  url: string
-): Promise<{
+export async function loadFromOrpheusUrl(url: string): Promise<{
   content: Buffer<ArrayBuffer>;
   contentType: string;
   cacheable?: boolean;
