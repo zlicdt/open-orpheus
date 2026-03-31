@@ -8,7 +8,12 @@ import { Menu } from "@open-orpheus/ui";
 import { registerCallHandler } from "../calls";
 import { loadFromOrpheusUrl } from "../orpheus";
 import { getWindowScaleFactor, pngFromIco } from "../util";
-import { getMenus, getWindowById, setMaximumSize, setMinimumSize } from "../window";
+import {
+  getMenus,
+  getWindowById,
+  setMaximumSize,
+  setMinimumSize,
+} from "../window";
 import { AppMenuItem } from "../menu";
 import { getApp } from "../ui";
 
