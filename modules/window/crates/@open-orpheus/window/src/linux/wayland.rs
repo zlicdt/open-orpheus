@@ -11,6 +11,12 @@
 // Wire format (from connection.c):
 //   [object_id : u32][size<<16 | opcode : u32][payload ...]
 //   All values are native-endian.  size includes the 8-byte header.
+//
+// Multi-connection:
+//   Each Wayland socket fd gets its own `WaylandConn` tracking object IDs,
+//   pointer state, and surface/toplevel mappings.  A single global
+//   `LAST_BUTTON` records the most recent button press and its connection fd
+//   so `send_xdg_toplevel_move` targets the correct socket.
 
 use std::{
     collections::HashMap,
@@ -86,24 +92,135 @@ static HOOK_CLOSE: OnceLock<DetourClose> = OnceLock::new();
 static HOOK_RECVMSG: OnceLock<DetourRecvmsg> = OnceLock::new();
 static HOOK_SENDMSG: OnceLock<DetourSendmsg> = OnceLock::new();
 
+// ── Per-connection tracking state ──────────────────────────────────────────
+
+struct WaylandConn {
+    ifaces: HashMap<u32, Iface>,
+    pointer_focus: HashMap<u32, u32>, // ptr_id → wl_surface_id
+    pointer_seat: HashMap<u32, u32>,  // ptr_id → seat_id
+    xdg_to_wl: HashMap<u32, u32>,    // xdg_surface_id → wl_surface_id
+    wl_to_top: HashMap<u32, u32>,    // wl_surface_id → xdg_toplevel_id
+    top_to_xdg: HashMap<u32, u32>,   // xdg_toplevel_id → xdg_surface_id
+}
+
+impl WaylandConn {
+    fn new() -> Self {
+        let mut ifaces = HashMap::new();
+        ifaces.insert(1u32, Iface::WlDisplay); // wl_display is always object ID 1
+        Self {
+            ifaces,
+            pointer_focus: HashMap::new(),
+            pointer_seat: HashMap::new(),
+            xdg_to_wl: HashMap::new(),
+            wl_to_top: HashMap::new(),
+            top_to_xdg: HashMap::new(),
+        }
+    }
+
+    fn reset_tracking(&mut self) {
+        self.ifaces.clear();
+        self.ifaces.insert(1u32, Iface::WlDisplay);
+        self.pointer_focus.clear();
+        self.pointer_seat.clear();
+        self.xdg_to_wl.clear();
+        self.wl_to_top.clear();
+        self.top_to_xdg.clear();
+    }
+
+    fn purge(&mut self, id: u32) {
+        match self.ifaces.get(&id).copied() {
+            Some(Iface::WlPointer) => {
+                self.pointer_focus.remove(&id);
+                self.pointer_seat.remove(&id);
+            }
+            Some(Iface::WlSurface) => {
+                self.xdg_to_wl.retain(|_, v| *v != id);
+                self.wl_to_top.remove(&id);
+                self.pointer_focus.retain(|_, v| *v != id);
+            }
+            Some(Iface::XdgSurface) => {
+                // Cascade: purge any xdg_toplevel that depends on this xdg_surface.
+                let owned_top = self
+                    .top_to_xdg
+                    .iter()
+                    .find(|(_, v)| **v == id)
+                    .map(|(k, _)| *k);
+                if let Some(tid) = owned_top {
+                    self.purge(tid);
+                }
+                self.xdg_to_wl.remove(&id);
+            }
+            Some(Iface::XdgToplevel) => {
+                self.top_to_xdg.remove(&id);
+                self.wl_to_top.retain(|_, v| *v != id);
+            }
+            Some(Iface::WlSeat) => {
+                self.pointer_seat.retain(|_, v| *v != id);
+            }
+            _ => {}
+        }
+        self.ifaces.remove(&id);
+    }
+}
+
 // ── Global state ───────────────────────────────────────────────────────────
 
 static IS_WAYLAND: OnceLock<bool> = OnceLock::new();
-static WAYLAND_FD: OnceLock<Mutex<Option<RawFd>>> = OnceLock::new();
-static IFACES: OnceLock<Mutex<HashMap<u32, Iface>>> = OnceLock::new();
-static POINTER_FOCUS: OnceLock<Mutex<HashMap<u32, u32>>> = OnceLock::new(); // ptr_id → wl_surface_id
-static POINTER_SEAT: OnceLock<Mutex<HashMap<u32, u32>>> = OnceLock::new(); // ptr_id → seat_id
-static XDG_TO_WL: OnceLock<Mutex<HashMap<u32, u32>>> = OnceLock::new(); // xdg_surface_id → wl_surface_id
-static WL_TO_TOP: OnceLock<Mutex<HashMap<u32, u32>>> = OnceLock::new(); // wl_surface_id → xdg_toplevel_id
-static TOP_TO_XDG: OnceLock<Mutex<HashMap<u32, u32>>> = OnceLock::new(); // xdg_toplevel_id → xdg_surface_id
-// Snapshot of the last button-press: (seat_id, serial, wl_surface_id)
-// seat_id is captured at press time so pointer object lifecycle changes
-// (e.g. DevTools opening/closing destroys and re-creates wl_pointer) cannot
-// invalidate the recorded values before send_xdg_toplevel_move is called.
-static LAST_BUTTON: OnceLock<Mutex<Option<(u32, u32, u32)>>> = OnceLock::new();
+/// Per-connection tracking state, keyed by Wayland socket fd.
+static CONNS: OnceLock<Mutex<HashMap<RawFd, WaylandConn>>> = OnceLock::new();
+/// Last button-press snapshot: (fd, seat_id, serial, wl_surface_id).
+/// Captures the connection fd so `send_xdg_toplevel_move` sends on the right
+/// socket.  seat_id is captured at press time so pointer object lifecycle
+/// changes (e.g. DevTools opening/closing destroys and re-creates wl_pointer)
+/// cannot invalidate the recorded values.
+#[allow(clippy::type_complexity)]
+static LAST_BUTTON: OnceLock<Mutex<Option<(RawFd, u32, u32, u32)>>> = OnceLock::new();
 // Per-fd reassembly buffers — messages can span multiple sendmsg/recvmsg calls.
 static RX_BUFS: OnceLock<Mutex<HashMap<RawFd, Vec<u8>>>> = OnceLock::new();
 static TX_BUFS: OnceLock<Mutex<HashMap<RawFd, Vec<u8>>>> = OnceLock::new();
+
+// ── Toplevel creation callbacks ────────────────────────────────────────────
+//
+// Extension point for future `make_next_created_wayland_window_*()` APIs.
+// Callbacks are consumed (drained) when the next xdg_toplevel is created
+// on any tracked connection.
+
+/// Information about a newly created xdg_toplevel, passed to creation callbacks.
+#[allow(dead_code)]
+pub(super) struct NewToplevel {
+    pub fd: RawFd,
+    pub toplevel_id: u32,
+    pub xdg_surface_id: u32,
+    pub wl_surface_id: Option<u32>,
+}
+
+type ToplevelCreatedCb = Box<dyn FnOnce(&NewToplevel) + Send>;
+static ON_TOPLEVEL_CREATED: OnceLock<Mutex<Vec<ToplevelCreatedCb>>> = OnceLock::new();
+
+/// Registers a one-shot callback invoked when the next xdg_toplevel is created
+/// on any tracked connection.  The callback is consumed after invocation.
+#[allow(dead_code)]
+pub(super) fn on_next_toplevel_created(
+    cb: impl FnOnce(&NewToplevel) + Send + 'static,
+) {
+    if let Some(m) = ON_TOPLEVEL_CREATED.get()
+        && let Ok(mut cbs) = m.lock()
+    {
+        cbs.push(Box::new(cb));
+    }
+}
+
+fn fire_toplevel_callbacks(info: &NewToplevel) {
+    if let Some(m) = ON_TOPLEVEL_CREATED.get()
+        && let Ok(mut cbs) = m.lock()
+    {
+        let callbacks: Vec<_> = cbs.drain(..).collect();
+        drop(cbs);
+        for cb in callbacks {
+            cb(info);
+        }
+    }
+}
 
 // ── Object interface tags ──────────────────────────────────────────────────
 
@@ -224,29 +341,11 @@ fn parse_wl_str(buf: &[u8], offset: usize) -> Option<(&str, usize)> {
 
 // ── State helpers ─────────────────────────────────────────────────────────
 
-fn wayland_fd() -> Option<RawFd> {
-    WAYLAND_FD.get()?.lock().ok().and_then(|g| *g)
-}
 fn is_wayland_fd(fd: RawFd) -> bool {
-    wayland_fd() == Some(fd)
-}
-
-fn iface_of(id: u32) -> Option<Iface> {
-    IFACES.get()?.lock().ok()?.get(&id).copied()
-}
-fn set_iface(id: u32, iface: Iface) {
-    if let Some(m) = IFACES.get()
-        && let Ok(mut map) = m.lock()
-    {
-        map.insert(id, iface);
-    }
-}
-fn del_iface(id: u32) {
-    if let Some(m) = IFACES.get()
-        && let Ok(mut map) = m.lock()
-    {
-        map.remove(&id);
-    }
+    CONNS
+        .get()
+        .and_then(|m| m.lock().ok())
+        .is_some_and(|map| map.contains_key(&fd))
 }
 
 // ── Stream reassembly ─────────────────────────────────────────────────────
@@ -273,7 +372,7 @@ fn feed(
 
     // Hold the buffer lock only long enough to append + extract complete
     // messages.  Releasing before dispatch avoids nested lock ordering issues
-    // (the handlers acquire IFACES, POINTER_FOCUS, etc.).
+    // (the handlers acquire CONNS, LAST_BUTTON, etc.).
     let (msgs, sync_lost) = {
         let Ok(mut map) = storage.lock() else { return };
         let buf = map.entry(fd).or_default();
@@ -300,55 +399,78 @@ fn feed(
 
     for (oid, op, msg) in msgs {
         if is_event {
-            on_event(oid, op, &msg);
+            on_event(fd, oid, op, &msg);
         } else {
-            on_request(oid, op, &msg);
+            on_request(fd, oid, op, &msg);
         }
     }
 
     // 4 MiB guard: if the reassembly buffer held more than 4 MiB of
-    // incomplete data, we have likely lost wire-format sync.  Reset all
-    // tracking state so stale object IDs cannot be reused.
+    // incomplete data, we have likely lost wire-format sync.  Reset the
+    // tracking state for this connection so stale object IDs cannot be reused.
     if sync_lost {
-        eprintln!("[wayland] reassembly buffer exceeded 4 MiB — sync lost, resetting state");
-        reset_tracking_state();
+        eprintln!(
+            "[wayland] reassembly buffer exceeded 4 MiB — sync lost, resetting state for fd {}",
+            fd
+        );
+        if let Some(m) = CONNS.get()
+            && let Ok(mut map) = m.lock()
+            && let Some(conn) = map.get_mut(&fd) {
+                conn.reset_tracking();
+            }
     }
 }
 
 // ── Event handler (server → client) ───────────────────────────────────────
 
-fn on_event(oid: u32, op: u16, msg: &[u8]) {
+fn on_event(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
+    let Some(conns) = CONNS.get() else { return };
+    let Ok(mut guard) = conns.lock() else { return };
+    let Some(conn) = guard.get_mut(&fd) else { return };
+
     // wl_display::delete_id — server confirms the client ID is fully released.
     if oid == 1 && op == EVT_DELETE_ID {
         if let Some(dead) = ru32(msg, 8) {
-            purge(dead);
+            conn.purge(dead);
         }
         return;
     }
 
-    if iface_of(oid) == Some(Iface::WlPointer) {
-        on_pointer_event(oid, op, msg);
+    if conn.ifaces.get(&oid) == Some(&Iface::WlPointer) {
+        let button_info = handle_pointer_event(conn, oid, op, msg);
+        // Drop the CONNS lock before touching LAST_BUTTON to avoid
+        // nested-lock ordering issues with send_xdg_toplevel_move.
+        drop(guard);
+        if let Some((seat_id, serial, surf_id)) = button_info
+            && let Some(m) = LAST_BUTTON.get()
+            && let Ok(mut opt) = m.lock()
+        {
+            *opt = Some((fd, seat_id, serial, surf_id));
+        }
     }
 }
 
-fn on_pointer_event(ptr_id: u32, op: u16, msg: &[u8]) {
+/// Processes a wl_pointer event within the connection.
+/// Returns `Some((seat_id, serial, surf_id))` for a button press that should
+/// update the global `LAST_BUTTON`.
+fn handle_pointer_event(
+    conn: &mut WaylandConn,
+    ptr_id: u32,
+    op: u16,
+    msg: &[u8],
+) -> Option<(u32, u32, u32)> {
     match op {
         EVT_ENTER => {
             // enter(serial: uint, surface: object, sx: fixed, sy: fixed) — 24 B
-            if let Some(surf_id) = ru32(msg, 12)
-                && let Some(m) = POINTER_FOCUS.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.insert(ptr_id, surf_id);
+            if let Some(surf_id) = ru32(msg, 12) {
+                conn.pointer_focus.insert(ptr_id, surf_id);
             }
+            None
         }
         EVT_LEAVE => {
             // A pointer can focus at most one surface at a time; just remove it.
-            if let Some(m) = POINTER_FOCUS.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.remove(&ptr_id);
-            }
+            conn.pointer_focus.remove(&ptr_id);
+            None
         }
         EVT_BUTTON => {
             // button(serial: uint, time: uint, button: uint, state: uint) — 24 B
@@ -357,208 +479,129 @@ fn on_pointer_event(ptr_id: u32, op: u16, msg: &[u8]) {
             // Record only press events; the serial from a press is what
             // xdg_toplevel::move requires.
             if let (Some(serial), Some(BTN_PRESSED)) = (serial, state) {
-                let surf_id = POINTER_FOCUS
-                    .get()
-                    .and_then(|m| m.lock().ok())
-                    .and_then(|map| map.get(&ptr_id).copied());
+                let surf_id = conn.pointer_focus.get(&ptr_id).copied();
                 // Snapshot seat_id now — if the pointer object is later destroyed
                 // (e.g. DevTools opening causes a wl_pointer release + re-create)
-                // the POINTER_SEAT entry for ptr_id will be purged, making a
+                // the pointer_seat entry for ptr_id will be purged, making a
                 // deferred lookup return None.  Capturing it here keeps it valid.
-                let seat_id = POINTER_SEAT
-                    .get()
-                    .and_then(|m| m.lock().ok())
-                    .and_then(|map| map.get(&ptr_id).copied());
-                if let (Some(surf_id), Some(seat_id)) = (surf_id, seat_id)
-                    && let Some(m) = LAST_BUTTON.get()
-                    && let Ok(mut opt) = m.lock()
-                {
-                    *opt = Some((seat_id, serial, surf_id));
+                let seat_id = conn.pointer_seat.get(&ptr_id).copied();
+                if let (Some(surf_id), Some(seat_id)) = (surf_id, seat_id) {
+                    return Some((seat_id, serial, surf_id));
                 }
             }
+            None
         }
-        _ => {}
+        _ => None,
     }
 }
 
 // ── Request handler (client → server) ─────────────────────────────────────
 
-fn on_request(oid: u32, op: u16, msg: &[u8]) {
-    let Some(iface) = iface_of(oid) else { return };
+fn on_request(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
+    let mut new_toplevel: Option<NewToplevel> = None;
 
-    match (iface, op) {
-        // wl_display::get_registry(id: new_id)
-        (Iface::WlDisplay, REQ_GET_REGISTRY) => {
-            if let Some(new_id) = ru32(msg, 8) {
-                set_iface(new_id, Iface::WlRegistry);
+    {
+        let Some(conns) = CONNS.get() else { return };
+        let Ok(mut guard) = conns.lock() else { return };
+        let Some(conn) = guard.get_mut(&fd) else { return };
+
+        let Some(iface) = conn.ifaces.get(&oid).copied() else {
+            return;
+        };
+
+        match (iface, op) {
+            // wl_display::get_registry(id: new_id)
+            (Iface::WlDisplay, REQ_GET_REGISTRY) => {
+                if let Some(new_id) = ru32(msg, 8) {
+                    conn.ifaces.insert(new_id, Iface::WlRegistry);
+                }
             }
-        }
 
-        // wl_registry::bind(name: uint, interface: string, version: uint, id: new_id)
-        //
-        // new_id has no static interface in the XML so the wire format prepends
-        // (interface: string, version: uint) before the actual id uint.
-        (Iface::WlRegistry, REQ_BIND) => {
-            // bytes [8..12] = name (uint); bytes [12..] = interface string
-            if let Some((iface_name, after)) = parse_wl_str(msg, 12) {
-                // after+0 = version (u32), after+4 = new_id (u32)
-                if let Some(new_id) = ru32(msg, after + 4) {
-                    let iface = match iface_name {
-                        "wl_compositor" => Some(Iface::WlCompositor),
-                        "wl_seat" => Some(Iface::WlSeat),
-                        "xdg_wm_base" => Some(Iface::XdgWmBase),
-                        _ => None,
-                    };
-                    if let Some(iface) = iface {
-                        set_iface(new_id, iface);
+            // wl_registry::bind(name: uint, interface: string, version: uint, id: new_id)
+            //
+            // new_id has no static interface in the XML so the wire format prepends
+            // (interface: string, version: uint) before the actual id uint.
+            (Iface::WlRegistry, REQ_BIND) => {
+                // bytes [8..12] = name (uint); bytes [12..] = interface string
+                if let Some((iface_name, after)) = parse_wl_str(msg, 12) {
+                    // after+0 = version (u32), after+4 = new_id (u32)
+                    if let Some(new_id) = ru32(msg, after + 4) {
+                        let tag = match iface_name {
+                            "wl_compositor" => Some(Iface::WlCompositor),
+                            "wl_seat" => Some(Iface::WlSeat),
+                            "xdg_wm_base" => Some(Iface::XdgWmBase),
+                            _ => None,
+                        };
+                        if let Some(tag) = tag {
+                            conn.ifaces.insert(new_id, tag);
+                        }
                     }
                 }
             }
-        }
 
-        // wl_compositor::create_surface(id: new_id)
-        (Iface::WlCompositor, REQ_CREATE_SURFACE) => {
-            if let Some(new_id) = ru32(msg, 8) {
-                set_iface(new_id, Iface::WlSurface);
-            }
-        }
-
-        // wl_seat::get_pointer(id: new_id)
-        // Record the seat association so send_xdg_toplevel_move can look it up.
-        (Iface::WlSeat, REQ_GET_POINTER) => {
-            if let Some(new_id) = ru32(msg, 8) {
-                set_iface(new_id, Iface::WlPointer);
-                if let Some(m) = POINTER_SEAT.get()
-                    && let Ok(mut map) = m.lock()
-                {
-                    map.insert(new_id, oid);
+            // wl_compositor::create_surface(id: new_id)
+            (Iface::WlCompositor, REQ_CREATE_SURFACE) => {
+                if let Some(new_id) = ru32(msg, 8) {
+                    conn.ifaces.insert(new_id, Iface::WlSurface);
                 }
             }
-        }
 
-        // xdg_wm_base::get_xdg_surface(id: new_id, surface: object)
-        (Iface::XdgWmBase, REQ_GET_XDG_SURFACE) => {
-            if let (Some(xdg_id), Some(wl_id)) = (ru32(msg, 8), ru32(msg, 12)) {
-                set_iface(xdg_id, Iface::XdgSurface);
-                if let Some(m) = XDG_TO_WL.get()
-                    && let Ok(mut map) = m.lock()
-                {
-                    map.insert(xdg_id, wl_id);
+            // wl_seat::get_pointer(id: new_id)
+            // Record the seat association so send_xdg_toplevel_move can look it up.
+            (Iface::WlSeat, REQ_GET_POINTER) => {
+                if let Some(new_id) = ru32(msg, 8) {
+                    conn.ifaces.insert(new_id, Iface::WlPointer);
+                    conn.pointer_seat.insert(new_id, oid);
                 }
             }
-        }
 
-        // xdg_surface::get_toplevel(id: new_id)
-        (Iface::XdgSurface, REQ_GET_TOPLEVEL) => {
-            if let Some(top_id) = ru32(msg, 8) {
-                set_iface(top_id, Iface::XdgToplevel);
-                if let Some(m) = TOP_TO_XDG.get()
-                    && let Ok(mut map) = m.lock()
-                {
-                    map.insert(top_id, oid);
-                }
-                // Populate the direct wl_surface → xdg_toplevel lookup used by
-                // send_xdg_toplevel_move; this avoids a reverse scan at drag time.
-                let wl_id = XDG_TO_WL
-                    .get()
-                    .and_then(|m| m.lock().ok())
-                    .and_then(|map| map.get(&oid).copied());
-                if let Some(wl_id) = wl_id
-                    && let Some(m) = WL_TO_TOP.get()
-                    && let Ok(mut map) = m.lock()
-                {
-                    map.insert(wl_id, top_id);
+            // xdg_wm_base::get_xdg_surface(id: new_id, surface: object)
+            (Iface::XdgWmBase, REQ_GET_XDG_SURFACE) => {
+                if let (Some(xdg_id), Some(wl_id)) = (ru32(msg, 8), ru32(msg, 12)) {
+                    conn.ifaces.insert(xdg_id, Iface::XdgSurface);
+                    conn.xdg_to_wl.insert(xdg_id, wl_id);
                 }
             }
-        }
 
-        // Destructor requests — the client frees the ID immediately on send;
-        // we must clean up without waiting for the server's delete_id event.
-        // NOTE: wl_pointer's destructor is opcode 1 (release), NOT opcode 0
-        //       (set_cursor).  Conflating them would purge the pointer on every
-        //       cursor-shape change.
-        (Iface::WlSurface | Iface::XdgSurface | Iface::XdgToplevel, REQ_DESTROY) => {
-            purge(oid);
-        }
-        (Iface::WlPointer, WL_POINTER_RELEASE) => {
-            purge(oid);
-        }
+            // xdg_surface::get_toplevel(id: new_id)
+            (Iface::XdgSurface, REQ_GET_TOPLEVEL) => {
+                if let Some(top_id) = ru32(msg, 8) {
+                    conn.ifaces.insert(top_id, Iface::XdgToplevel);
+                    conn.top_to_xdg.insert(top_id, oid);
+                    let wl_id = conn.xdg_to_wl.get(&oid).copied();
+                    if let Some(wl_id) = wl_id {
+                        conn.wl_to_top.insert(wl_id, top_id);
+                    }
+                    new_toplevel = Some(NewToplevel {
+                        fd,
+                        toplevel_id: top_id,
+                        xdg_surface_id: oid,
+                        wl_surface_id: wl_id,
+                    });
+                }
+            }
 
-        _ => {}
+            // Destructor requests — the client frees the ID immediately on send;
+            // we must clean up without waiting for the server's delete_id event.
+            // NOTE: wl_pointer's destructor is opcode 1 (release), NOT opcode 0
+            //       (set_cursor).  Conflating them would purge the pointer on every
+            //       cursor-shape change.
+            (Iface::WlSurface | Iface::XdgSurface | Iface::XdgToplevel, REQ_DESTROY) => {
+                conn.purge(oid);
+            }
+            (Iface::WlPointer, WL_POINTER_RELEASE) => {
+                conn.purge(oid);
+            }
+
+            _ => {}
+        }
+    } // CONNS lock released
+
+    // Fire toplevel-created callbacks outside the CONNS lock so that
+    // callbacks can freely access connection state if needed.
+    if let Some(ref info) = new_toplevel {
+        fire_toplevel_callbacks(info);
     }
-}
-
-// ── Object lifecycle cleanup ───────────────────────────────────────────────
-
-fn purge(id: u32) {
-    match iface_of(id) {
-        Some(Iface::WlPointer) => {
-            if let Some(m) = POINTER_FOCUS.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.remove(&id);
-            }
-            if let Some(m) = POINTER_SEAT.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.remove(&id);
-            }
-        }
-        Some(Iface::WlSurface) => {
-            if let Some(m) = XDG_TO_WL.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.retain(|_, &mut v| v != id);
-            }
-            if let Some(m) = WL_TO_TOP.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.remove(&id);
-            }
-            if let Some(m) = POINTER_FOCUS.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.retain(|_, &mut v| v != id);
-            }
-        }
-        Some(Iface::XdgSurface) => {
-            // Cascade: purge any xdg_toplevel that depends on this xdg_surface.
-            // Locks are dropped before the recursive call.
-            let owned_top = TOP_TO_XDG
-                .get()
-                .and_then(|m| m.lock().ok())
-                .and_then(|map| map.iter().find(|(_, v)| **v == id).map(|(k, _)| *k));
-            if let Some(tid) = owned_top {
-                purge(tid);
-            }
-            if let Some(m) = XDG_TO_WL.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.remove(&id);
-            }
-        }
-        Some(Iface::XdgToplevel) => {
-            if let Some(m) = TOP_TO_XDG.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.remove(&id);
-            }
-            if let Some(m) = WL_TO_TOP.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.retain(|_, &mut v| v != id);
-            }
-        }
-        Some(Iface::WlSeat) => {
-            if let Some(m) = POINTER_SEAT.get()
-                && let Ok(mut map) = m.lock()
-            {
-                map.retain(|_, &mut v| v != id);
-            }
-        }
-        _ => {}
-    }
-    del_iface(id);
 }
 
 // ── Wayland socket path detection ─────────────────────────────────────────
@@ -616,54 +659,26 @@ fn is_wayland_socket(addr: *const c_void, addrlen: u32) -> bool {
         && filename[8..].iter().all(|b| b.is_ascii_digit())
 }
 
-// ── Connection reset ──────────────────────────────────────────────────────
-//
-// Called when the tracked Wayland fd is closed.  Clears all per-connection
-// state so that when Chromium reconnects (possibly reusing the same fd number)
-// hook_connect properly re-initialises everything from a clean slate.
-//
-// IS_WAYLAND is intentionally left true — we know this process uses Wayland.
+// ── Connection management ──────────────────────────────────────────────────
 
-/// Resets object-tracking state (IFACES, pointer/surface maps, LAST_BUTTON)
-/// without touching WAYLAND_FD or reassembly buffers.  Used after sync loss
-/// and when replacing the tracked connection.
-fn reset_tracking_state() {
-    if let Some(m) = IFACES.get() {
-        let _ = m.lock().map(|mut g| {
-            g.clear();
-            g.insert(1, Iface::WlDisplay);
-        });
+fn reset_connection_state(fd: RawFd) {
+    if let Some(m) = CONNS.get()
+        && let Ok(mut map) = m.lock()
+    {
+        map.remove(&fd);
     }
-    if let Some(m) = POINTER_FOCUS.get() {
-        let _ = m.lock().map(|mut g| g.clear());
+    // Clear LAST_BUTTON if it belongs to this connection.
+    if let Some(m) = LAST_BUTTON.get()
+        && let Ok(mut opt) = m.lock()
+        && opt.is_some_and(|(f, _, _, _)| f == fd)
+    {
+        *opt = None;
     }
-    if let Some(m) = POINTER_SEAT.get() {
-        let _ = m.lock().map(|mut g| g.clear());
-    }
-    if let Some(m) = XDG_TO_WL.get() {
-        let _ = m.lock().map(|mut g| g.clear());
-    }
-    if let Some(m) = WL_TO_TOP.get() {
-        let _ = m.lock().map(|mut g| g.clear());
-    }
-    if let Some(m) = TOP_TO_XDG.get() {
-        let _ = m.lock().map(|mut g| g.clear());
-    }
-    if let Some(m) = LAST_BUTTON.get() {
-        let _ = m.lock().map(|mut g| *g = None);
-    }
-}
-
-fn reset_connection_state(old_fd: RawFd) {
-    if let Some(m) = WAYLAND_FD.get() {
-        let _ = m.lock().map(|mut g| *g = None);
-    }
-    reset_tracking_state();
     if let Some(m) = RX_BUFS.get() {
-        let _ = m.lock().map(|mut g| g.remove(&old_fd));
+        let _ = m.lock().map(|mut g| g.remove(&fd));
     }
     if let Some(m) = TX_BUFS.get() {
-        let _ = m.lock().map(|mut g| g.remove(&old_fd));
+        let _ = m.lock().map(|mut g| g.remove(&fd));
     }
 }
 
@@ -676,36 +691,21 @@ fn reset_connection_state(old_fd: RawFd) {
 // Because the GenericDetour is stored in the OnceLock *before* enable() is
 // called, get() is always Some by the time any hook fires.
 
-/// connect(2) — detect the Wayland socket fd.
+/// connect(2) — detect Wayland socket fds and register new connections.
 extern "C" fn hook_connect(fd: c_int, addr: *const c_void, addrlen: u32) -> c_int {
     let ret = HOOK_CONNECT.get().map_or(-1, |h| h.call(fd, addr, addrlen));
     if ret == 0 && is_wayland_socket(addr, addrlen) {
         IS_WAYLAND.set(true).ok();
-        if let Some(guard) = WAYLAND_FD.get()
-            && let Ok(mut opt) = guard.lock()
+        if let Some(m) = CONNS.get()
+            && let Ok(mut map) = m.lock()
         {
-            let old_fd = *opt;
-            *opt = Some(fd);
-            // If replacing a previous connection, reset tracking state and
-            // clean up the old fd's reassembly buffers.
-            if let Some(old) = old_fd
-                && old != fd
-            {
-                drop(opt);
-                reset_tracking_state();
-                if let Some(m) = RX_BUFS.get() {
-                    let _ = m.lock().map(|mut g| g.remove(&old));
-                }
-                if let Some(m) = TX_BUFS.get() {
-                    let _ = m.lock().map(|mut g| g.remove(&old));
-                }
-            }
+            map.entry(fd).or_insert_with(WaylandConn::new);
         }
     }
     ret
 }
 
-/// close(2) — detect when the tracked Wayland fd is closed.
+/// close(2) — detect when a tracked Wayland fd is closed.
 extern "C" fn hook_close(fd: c_int) -> c_int {
     if is_wayland_fd(fd) {
         reset_connection_state(fd);
@@ -780,83 +780,23 @@ pub(super) fn is_wayland() -> bool {
     *IS_WAYLAND.get().unwrap_or(&false)
 }
 
-/// Sends `xdg_toplevel::move` using the serial from the last recorded
-/// `wl_pointer::button` press.  Returns `true` on success.
-pub(super) fn send_xdg_toplevel_move() -> bool {
-    // Retrieve the button-press snapshot captured in on_pointer_event.
-    // seat_id was snapshotted at press time, so pointer lifecycle changes
-    // (DevTools open/close, pointer re-creation) cannot invalidate it.
-    let Some((seat_id, serial, wl_surf_id)) = LAST_BUTTON
-        .get()
-        .and_then(|m| m.lock().ok())
-        .and_then(|g| *g)
-    else {
-        eprintln!("[wayland] send_xdg_toplevel_move: no button event recorded yet");
-        return false;
-    };
-
-    // Primary: direct wl_surface → xdg_toplevel mapping populated at get_toplevel time.
-    let top_id = WL_TO_TOP
-        .get()
-        .and_then(|m| m.lock().ok())
-        .and_then(|map| map.get(&wl_surf_id).copied())
-        .filter(|&id| iface_of(id) == Some(Iface::XdgToplevel))
-        // Fallback: reverse-search through xdg_surface when the direct entry is stale.
-        .or_else(|| {
-            let xdg_id = XDG_TO_WL
-                .get()
-                .and_then(|m| m.lock().ok())
-                .and_then(|map| map.iter().find(|(_, v)| **v == wl_surf_id).map(|(k, _)| *k));
-            xdg_id.and_then(|xid| {
-                TOP_TO_XDG
-                    .get()
-                    .and_then(|m| m.lock().ok())
-                    .and_then(|map| {
-                        map.iter()
-                            .filter(|(tid, sid)| {
-                                **sid == xid && iface_of(**tid) == Some(Iface::XdgToplevel)
-                            })
-                            .map(|(tid, _)| *tid)
-                            .max()
-                    })
-            })
-        });
-
-    let Some(top_id) = top_id else {
-        eprintln!(
-            "[wayland] send_xdg_toplevel_move: no live xdg_toplevel for wl_surface {}",
-            wl_surf_id
-        );
-        return false;
-    };
-
-    let Some(fd) = wayland_fd() else {
-        eprintln!("[wayland] send_xdg_toplevel_move: Wayland fd not captured");
-        return false;
-    };
-
-    // Craft xdg_toplevel::move(seat: object, serial: uint)
-    //   [xdg_toplevel_id : u32][size<<16 | opcode : u32][seat_id : u32][serial : u32]
-    //   Total: 16 bytes.
-    let hdr_word = (REQ_MOVE as u32) | (16u32 << 16);
-    let mut buf = [0u8; 16];
-    buf[0..4].copy_from_slice(&top_id.to_ne_bytes());
-    buf[4..8].copy_from_slice(&hdr_word.to_ne_bytes());
-    buf[8..12].copy_from_slice(&seat_id.to_ne_bytes());
-    buf[12..16].copy_from_slice(&serial.to_ne_bytes());
-
-    // Send via the original sendmsg trampoline (bypasses our hook_sendmsg,
-    // avoiding re-entrant parsing).  xdg_toplevel::move carries no file
-    // descriptors so an iov-only msghdr is sufficient.
-    //
-    // NOTE: a residual interleaving risk exists if libwayland has partially
-    // flushed its internal buffer (sendmsg returned a short write / EAGAIN).
-    // This is extremely unlikely in practice: both this call and libwayland's
-    // flush run on the main thread, the Wayland socket buffer is rarely full,
-    // and the 16-byte message is well below PIPE_BUF (atomic kernel write).
+/// Sends raw bytes on the given fd using the original sendmsg(2) trampoline,
+/// bypassing our hook.  Returns `true` if all bytes were sent.
+///
+/// This is the low-level building block for sending Wayland requests from
+/// outside the wire-protocol parser (e.g. `send_xdg_toplevel_move`, future
+/// `make_next_created_wayland_window_*()` implementations).
+///
+/// NOTE: a residual interleaving risk exists if libwayland has partially
+/// flushed its internal buffer (sendmsg returned a short write / EAGAIN).
+/// This is extremely unlikely in practice: both this call and libwayland's
+/// flush run on the main thread, the Wayland socket buffer is rarely full,
+/// and small messages are well below PIPE_BUF (atomic kernel write).
+#[allow(dead_code)]
+pub(super) fn send_raw_wayland(fd: RawFd, data: &mut [u8]) -> bool {
     let mut iov = libc::iovec {
-        iov_base: buf.as_mut_ptr() as *mut c_void,
-        iov_len: 16,
+        iov_base: data.as_mut_ptr() as *mut c_void,
+        iov_len: data.len(),
     };
     let msg = libc::msghdr {
         msg_name: std::ptr::null_mut(),
@@ -870,10 +810,86 @@ pub(super) fn send_xdg_toplevel_move() -> bool {
     let ret = HOOK_SENDMSG
         .get()
         .map_or(-1, |h| h.call(fd, &msg as *const msghdr, 0));
-    if ret != 16 {
+    ret as usize == data.len()
+}
+
+/// Sends `xdg_toplevel::move` using the serial from the last recorded
+/// `wl_pointer::button` press.  Returns `true` on success.
+pub(super) fn send_xdg_toplevel_move() -> bool {
+    // Retrieve the button-press snapshot captured in handle_pointer_event.
+    // seat_id was snapshotted at press time, so pointer lifecycle changes
+    // (DevTools open/close, pointer re-creation) cannot invalidate it.
+    let Some((fd, seat_id, serial, wl_surf_id)) = LAST_BUTTON
+        .get()
+        .and_then(|m| m.lock().ok())
+        .and_then(|g| *g)
+    else {
+        eprintln!("[wayland] send_xdg_toplevel_move: no button event recorded yet");
+        return false;
+    };
+
+    // Look up the xdg_toplevel for the focused wl_surface on this connection.
+    let top_id = {
+        let Some(conns) = CONNS.get() else {
+            return false;
+        };
+        let Ok(guard) = conns.lock() else {
+            return false;
+        };
+        let Some(conn) = guard.get(&fd) else {
+            eprintln!(
+                "[wayland] send_xdg_toplevel_move: connection for fd {} no longer tracked",
+                fd
+            );
+            return false;
+        };
+
+        // Primary: direct wl_surface → xdg_toplevel mapping populated at get_toplevel time.
+        conn.wl_to_top
+            .get(&wl_surf_id)
+            .copied()
+            .filter(|id| conn.ifaces.get(id) == Some(&Iface::XdgToplevel))
+            // Fallback: reverse-search through xdg_surface when the direct entry is stale.
+            .or_else(|| {
+                let xdg_id = conn
+                    .xdg_to_wl
+                    .iter()
+                    .find(|(_, v)| **v == wl_surf_id)
+                    .map(|(k, _)| *k);
+                xdg_id.and_then(|xid| {
+                    conn.top_to_xdg
+                        .iter()
+                        .filter(|(tid, sid)| {
+                            **sid == xid
+                                && conn.ifaces.get(tid) == Some(&Iface::XdgToplevel)
+                        })
+                        .map(|(tid, _)| *tid)
+                        .max()
+                })
+            })
+    };
+
+    let Some(top_id) = top_id else {
         eprintln!(
-            "[wayland] send_xdg_toplevel_move: sendmsg returned {} (errno {})",
-            ret,
+            "[wayland] send_xdg_toplevel_move: no live xdg_toplevel for wl_surface {}",
+            wl_surf_id
+        );
+        return false;
+    };
+
+    // Craft xdg_toplevel::move(seat: object, serial: uint)
+    //   [xdg_toplevel_id : u32][size<<16 | opcode : u32][seat_id : u32][serial : u32]
+    //   Total: 16 bytes.
+    let hdr_word = (REQ_MOVE as u32) | (16u32 << 16);
+    let mut buf = [0u8; 16];
+    buf[0..4].copy_from_slice(&top_id.to_ne_bytes());
+    buf[4..8].copy_from_slice(&hdr_word.to_ne_bytes());
+    buf[8..12].copy_from_slice(&seat_id.to_ne_bytes());
+    buf[12..16].copy_from_slice(&serial.to_ne_bytes());
+
+    if !send_raw_wayland(fd, &mut buf) {
+        eprintln!(
+            "[wayland] send_xdg_toplevel_move: sendmsg failed (errno {})",
             unsafe { *libc::__errno_location() }
         );
         return false;
@@ -922,21 +938,12 @@ macro_rules! install_hook {
 }
 
 pub(super) fn init_wayland_hook() {
-    // Initialise all state maps before any hook fires.
-    WAYLAND_FD.get_or_init(|| Mutex::new(None));
-    IFACES.get_or_init(|| {
-        let mut m = HashMap::new();
-        m.insert(1u32, Iface::WlDisplay); // wl_display is always object ID 1
-        Mutex::new(m)
-    });
-    POINTER_FOCUS.get_or_init(|| Mutex::new(HashMap::new()));
-    POINTER_SEAT.get_or_init(|| Mutex::new(HashMap::new()));
-    XDG_TO_WL.get_or_init(|| Mutex::new(HashMap::new()));
-    WL_TO_TOP.get_or_init(|| Mutex::new(HashMap::new()));
-    TOP_TO_XDG.get_or_init(|| Mutex::new(HashMap::new()));
+    // Initialise all state before any hook fires.
+    CONNS.get_or_init(|| Mutex::new(HashMap::new()));
     LAST_BUTTON.get_or_init(|| Mutex::new(None));
     RX_BUFS.get_or_init(|| Mutex::new(HashMap::new()));
     TX_BUFS.get_or_init(|| Mutex::new(HashMap::new()));
+    ON_TOPLEVEL_CREATED.get_or_init(|| Mutex::new(Vec::new()));
 
     install_hook!(HOOK_CONNECT, "connect", FnConnect, hook_connect);
     install_hook!(HOOK_CLOSE, "close", FnClose, hook_close);
@@ -944,11 +951,34 @@ pub(super) fn init_wayland_hook() {
     install_hook!(HOOK_SENDMSG, "sendmsg", FnSendmsg, hook_sendmsg);
 }
 
-/// Removes all installed Wayland hooks and resets connection state.
+/// Removes all installed Wayland hooks and resets all connection state.
 /// Safe to call from any thread; idempotent if called multiple times.
 pub(super) fn remove_wayland_hook() {
-    if let Some(fd) = wayland_fd() {
-        reset_connection_state(fd);
+    // Clear all connection state.
+    if let Some(m) = CONNS.get()
+        && let Ok(mut map) = m.lock()
+    {
+        map.clear();
+    }
+    if let Some(m) = LAST_BUTTON.get()
+        && let Ok(mut opt) = m.lock()
+    {
+        *opt = None;
+    }
+    if let Some(m) = RX_BUFS.get()
+        && let Ok(mut map) = m.lock()
+    {
+        map.clear();
+    }
+    if let Some(m) = TX_BUFS.get()
+        && let Ok(mut map) = m.lock()
+    {
+        map.clear();
+    }
+    if let Some(m) = ON_TOPLEVEL_CREATED.get()
+        && let Ok(mut cbs) = m.lock()
+    {
+        cbs.clear();
     }
     // Disable all detours; retour restores the original prologue on disable().
     if let Some(h) = HOOK_SENDMSG.get() {
