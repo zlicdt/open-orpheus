@@ -98,9 +98,9 @@ struct WaylandConn {
     ifaces: HashMap<u32, Iface>,
     pointer_focus: HashMap<u32, u32>, // ptr_id → wl_surface_id
     pointer_seat: HashMap<u32, u32>,  // ptr_id → seat_id
-    xdg_to_wl: HashMap<u32, u32>,    // xdg_surface_id → wl_surface_id
-    wl_to_top: HashMap<u32, u32>,    // wl_surface_id → xdg_toplevel_id
-    top_to_xdg: HashMap<u32, u32>,   // xdg_toplevel_id → xdg_surface_id
+    xdg_to_wl: HashMap<u32, u32>,     // xdg_surface_id → wl_surface_id
+    wl_to_top: HashMap<u32, u32>,     // wl_surface_id → xdg_toplevel_id
+    top_to_xdg: HashMap<u32, u32>,    // xdg_toplevel_id → xdg_surface_id
 }
 
 impl WaylandConn {
@@ -200,9 +200,7 @@ static ON_TOPLEVEL_CREATED: OnceLock<Mutex<Vec<ToplevelCreatedCb>>> = OnceLock::
 /// Registers a one-shot callback invoked when the next xdg_toplevel is created
 /// on any tracked connection.  The callback is consumed after invocation.
 #[allow(dead_code)]
-pub(super) fn on_next_toplevel_created(
-    cb: impl FnOnce(&NewToplevel) + Send + 'static,
-) {
+pub(super) fn on_next_toplevel_created(cb: impl FnOnce(&NewToplevel) + Send + 'static) {
     if let Some(m) = ON_TOPLEVEL_CREATED.get()
         && let Ok(mut cbs) = m.lock()
     {
@@ -415,9 +413,10 @@ fn feed(
         );
         if let Some(m) = CONNS.get()
             && let Ok(mut map) = m.lock()
-            && let Some(conn) = map.get_mut(&fd) {
-                conn.reset_tracking();
-            }
+            && let Some(conn) = map.get_mut(&fd)
+        {
+            conn.reset_tracking();
+        }
     }
 }
 
@@ -426,7 +425,9 @@ fn feed(
 fn on_event(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
     let Some(conns) = CONNS.get() else { return };
     let Ok(mut guard) = conns.lock() else { return };
-    let Some(conn) = guard.get_mut(&fd) else { return };
+    let Some(conn) = guard.get_mut(&fd) else {
+        return;
+    };
 
     // wl_display::delete_id — server confirms the client ID is fully released.
     if oid == 1 && op == EVT_DELETE_ID {
@@ -503,7 +504,9 @@ fn on_request(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
     {
         let Some(conns) = CONNS.get() else { return };
         let Ok(mut guard) = conns.lock() else { return };
-        let Some(conn) = guard.get_mut(&fd) else { return };
+        let Some(conn) = guard.get_mut(&fd) else {
+            return;
+        };
 
         let Some(iface) = conn.ifaces.get(&oid).copied() else {
             return;
@@ -860,8 +863,7 @@ pub(super) fn send_xdg_toplevel_move() -> bool {
                     conn.top_to_xdg
                         .iter()
                         .filter(|(tid, sid)| {
-                            **sid == xid
-                                && conn.ifaces.get(tid) == Some(&Iface::XdgToplevel)
+                            **sid == xid && conn.ifaces.get(tid) == Some(&Iface::XdgToplevel)
                         })
                         .map(|(tid, _)| *tid)
                         .max()
