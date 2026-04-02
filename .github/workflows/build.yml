@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for module in modules/database modules/ui modules/window; do
+          for module in modules/lifecycle modules/database modules/ui modules/window; do
             echo "Building ${module}"
             pushd "${module}" > /dev/null
             pnpm build
