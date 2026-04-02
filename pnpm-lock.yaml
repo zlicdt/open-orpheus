@@ -57,6 +57,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.4
         version: 9.39.4
+      '@open-orpheus/lifecycle':
+        specifier: workspace:*
+        version: link:modules/lifecycle
       '@types/electron-squirrel-startup':
         specifier: ^1.0.2
         version: 1.0.2

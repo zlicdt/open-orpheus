@@ -2,6 +2,8 @@ import { defineConfig, type Plugin, type UserConfig } from "vite";
 import { spawnSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
 
+import { onExit } from "@open-orpheus/lifecycle";
+
 const GUI_DIR = resolve(__dirname, "gui");
 // Port for the SvelteKit dev server spawned alongside the dummy Vite dev server.
 const SVELTEKIT_DEV_PORT = 5174;
@@ -19,7 +21,7 @@ function runPackageManager(args: string[]) {
   const { command, baseArgs } = getPackageManagerCommand();
   return spawn(command, [...baseArgs, ...args], {
     cwd: GUI_DIR,
-    stdio: ["ignore", "inherit", "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
     shell: false,
   });
 }
@@ -53,6 +55,16 @@ function runPackageManagerSync(args: string[]) {
 function svelteKitPlugin(): Plugin {
   let devProcess: ReturnType<typeof spawn> | null = null;
 
+  onExit(() => {
+    if (!devProcess) {
+      return;
+    }
+    // We don't want noises when killing the dev server
+    devProcess.stdout?.unpipe(process.stdout);
+    devProcess.stderr?.unpipe(process.stderr);
+    devProcess.kill();
+  });
+
   return {
     name: "sveltekit-bridge",
 
@@ -73,7 +85,7 @@ function svelteKitPlugin(): Plugin {
       return {};
     },
 
-    configureServer(server) {
+    configureServer() {
       devProcess = runPackageManager([
         "run",
         "dev",
@@ -81,7 +93,8 @@ function svelteKitPlugin(): Plugin {
         "--port",
         String(SVELTEKIT_DEV_PORT),
       ]);
-      server.httpServer?.on("close", () => devProcess?.kill());
+      devProcess.stdout?.pipe(process.stdout);
+      devProcess.stderr?.pipe(process.stderr);
     },
 
     buildStart() {
