@@ -13,3 +13,4 @@ gui/static/
 
 # Module dist
 /modules/**/lib/**
+/modules/**/dist/**

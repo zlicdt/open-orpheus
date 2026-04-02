@@ -5,15 +5,11 @@ import { fileURLToPath } from "node:url";
 
 async function runBuildCommand(modulePath: string, script: string) {
   return new Promise<{ status: number | null }>((resolve, reject) => {
-    const buildProcess = spawn(
-      "pnpm",
-      ["run", script],
-      {
-        cwd: modulePath,
-        stdio: "inherit",
-        shell: true,
-      }
-    );
+    const buildProcess = spawn("pnpm", ["run", script], {
+      cwd: modulePath,
+      stdio: "inherit",
+      shell: true,
+    });
 
     buildProcess.on("error", (err) => {
       reject(err);
@@ -33,16 +29,27 @@ interface ModuleInfo {
   scripts: Record<string, string>;
 }
 
-async function readModuleInfos(modulesDir: string, moduleNames: string[]): Promise<ModuleInfo[]> {
+async function readModuleInfos(
+  modulesDir: string,
+  moduleNames: string[]
+): Promise<ModuleInfo[]> {
   return Promise.all(
     moduleNames.map(async (dirName) => {
       const modulePath = resolve(modulesDir, dirName);
-      const pkg = JSON.parse(await readFile(resolve(modulePath, "package.json"), "utf-8"));
+      const pkg = JSON.parse(
+        await readFile(resolve(modulePath, "package.json"), "utf-8")
+      );
       const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
       const workspaceDeps = Object.entries(allDeps)
         .filter(([, ver]) => (ver as string).startsWith("workspace:"))
         .map(([name]) => name);
-      return { dirName, packageName: pkg.name as string, path: modulePath, workspaceDeps, scripts: (pkg.scripts ?? {}) as Record<string, string> };
+      return {
+        dirName,
+        packageName: pkg.name as string,
+        path: modulePath,
+        workspaceDeps,
+        scripts: (pkg.scripts ?? {}) as Record<string, string>,
+      };
     })
   );
 }
@@ -56,7 +63,9 @@ function topoSort(modules: ModuleInfo[]): ModuleInfo[] {
   function visit(mod: ModuleInfo) {
     if (visited.has(mod.packageName)) return;
     if (visiting.has(mod.packageName)) {
-      throw new Error(`Circular dependency detected involving ${mod.packageName}`);
+      throw new Error(
+        `Circular dependency detected involving ${mod.packageName}`
+      );
     }
     visiting.add(mod.packageName);
     for (const dep of mod.workspaceDeps) {
@@ -73,15 +82,21 @@ function topoSort(modules: ModuleInfo[]): ModuleInfo[] {
 }
 
 async function buildModules() {
-  const modulesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../modules");
+  const modulesDir = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../modules"
+  );
   const moduleNames = await readdir(modulesDir);
   const modules = await readModuleInfos(modulesDir, moduleNames);
   const sorted = topoSort(modules);
   const preferScript = process.env.PREFER_SCRIPT;
 
   for (const mod of sorted) {
-    const script = preferScript && mod.scripts[preferScript] ? preferScript : "build";
-    console.log(`Building module: ${mod.dirName} (${mod.packageName}) [${script}]`);
+    const script =
+      preferScript && mod.scripts[preferScript] ? preferScript : "build";
+    console.log(
+      `Building module: ${mod.dirName} (${mod.packageName}) [${script}]`
+    );
     const result = await runBuildCommand(mod.path, script);
     if (result.status !== 0) {
       console.error(`Failed to build module: ${mod.dirName}`);
