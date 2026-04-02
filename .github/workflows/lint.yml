@@ -27,7 +27,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build native modules
-        run: pnpm build:modules
+        shell: bash
+        run: PREFER_SCRIPT=prepack pnpm build:modules
 
       - name: Run ESLint
         run: pnpm lint

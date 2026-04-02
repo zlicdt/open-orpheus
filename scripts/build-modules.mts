@@ -3,11 +3,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-async function runBuildCommand(modulePath: string) {
+async function runBuildCommand(modulePath: string, script: string) {
   return new Promise<{ status: number | null }>((resolve, reject) => {
     const buildProcess = spawn(
       "pnpm",
-      ["run", "build"],
+      ["run", script],
       {
         cwd: modulePath,
         stdio: "inherit",
@@ -30,6 +30,7 @@ interface ModuleInfo {
   packageName: string;
   path: string;
   workspaceDeps: string[];
+  scripts: Record<string, string>;
 }
 
 async function readModuleInfos(modulesDir: string, moduleNames: string[]): Promise<ModuleInfo[]> {
@@ -41,7 +42,7 @@ async function readModuleInfos(modulesDir: string, moduleNames: string[]): Promi
       const workspaceDeps = Object.entries(allDeps)
         .filter(([, ver]) => (ver as string).startsWith("workspace:"))
         .map(([name]) => name);
-      return { dirName, packageName: pkg.name as string, path: modulePath, workspaceDeps };
+      return { dirName, packageName: pkg.name as string, path: modulePath, workspaceDeps, scripts: (pkg.scripts ?? {}) as Record<string, string> };
     })
   );
 }
@@ -76,10 +77,12 @@ async function buildModules() {
   const moduleNames = await readdir(modulesDir);
   const modules = await readModuleInfos(modulesDir, moduleNames);
   const sorted = topoSort(modules);
+  const preferScript = process.env.PREFER_SCRIPT;
 
   for (const mod of sorted) {
-    console.log(`Building module: ${mod.dirName} (${mod.packageName})`);
-    const result = await runBuildCommand(mod.path);
+    const script = preferScript && mod.scripts[preferScript] ? preferScript : "build";
+    console.log(`Building module: ${mod.dirName} (${mod.packageName}) [${script}]`);
+    const result = await runBuildCommand(mod.path, script);
     if (result.status !== 0) {
       console.error(`Failed to build module: ${mod.dirName}`);
       process.exit(1);
