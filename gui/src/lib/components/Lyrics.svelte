@@ -191,13 +191,13 @@
     void containerHeight;
     requestAnimationFrame(() => {
       if (line1WrapperEl && line1ContainerEl) {
-        const textDim = style.vertical
-          ? line1WrapperEl.offsetHeight
-          : line1WrapperEl.offsetWidth;
+        const scrollDim = style.vertical
+          ? line1ContainerEl.scrollHeight
+          : line1ContainerEl.scrollWidth;
         const boxDim = style.vertical
           ? line1ContainerEl.clientHeight
           : line1ContainerEl.clientWidth;
-        line1Overflow = Math.max(0, textDim - boxDim);
+        line1Overflow = Math.max(0, scrollDim - boxDim);
       } else {
         line1Overflow = 0;
       }
@@ -212,13 +212,13 @@
     void containerHeight;
     requestAnimationFrame(() => {
       if (line2WrapperEl && line2ContainerEl) {
-        const textDim = style.vertical
-          ? line2WrapperEl.offsetHeight
-          : line2WrapperEl.offsetWidth;
+        const scrollDim = style.vertical
+          ? line2ContainerEl.scrollHeight
+          : line2ContainerEl.scrollWidth;
         const boxDim = style.vertical
           ? line2ContainerEl.clientHeight
           : line2ContainerEl.clientWidth;
-        line2Overflow = Math.max(0, textDim - boxDim);
+        line2Overflow = Math.max(0, scrollDim - boxDim);
       } else {
         line2Overflow = 0;
       }
