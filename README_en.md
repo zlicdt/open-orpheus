@@ -17,7 +17,7 @@ Uhh, this project is not end-user ready now! Sorry!
 
 ## Development
 
-You will need Node and Rust to work with this project.
+You will need Node and Rust to work with this project (Node v24 and Rust 1.92 are recommended).
 
 For root project, everything works just like any other Electron Forge project, but Open Orpheus has some its own native modules, it requires a few more steps to setup.
 
@@ -37,10 +37,10 @@ pnpm install
 
 Inside `modules` folder, there are a few native modules that Open Orpheus require to run.
 
-Enter each submodule's folder and build:
+Run from the root directory:
 
 ```sh
-pnpm build # Build the module (will build both Rust and Node code)
+pnpm build:modules # Build all modules (will build both Rust and Node code)
 ```
 
 ### Resources

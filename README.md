@@ -19,7 +19,7 @@
 
 ## 开发
 
-如果你要参与开发，需要先准备好 Node 和 Rust。
+如果你要参与开发，需要先准备好 Node 和 Rust（推荐 Node v24、Rust 1.92）。
 
 根项目这边的工作流和普通的 Electron Forge 项目差不多，不过 Open Orpheus 自己有一些原生模块，所以还得多做几步配置。
 
@@ -39,10 +39,10 @@ pnpm install
 
 `modules` 文件夹里有几个 Open Orpheus 运行所需的原生模块。
 
-进入每个子模块目录，执行构建：
+在根目录执行：
 
 ```sh
-pnpm build # 构建模块（会同时构建 Rust 和 Node 代码）
+pnpm build:modules # 构建所有模块（会同时构建 Rust 和 Node 代码）
 ```
 
 ### 资源文件
