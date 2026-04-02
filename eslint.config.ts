@@ -11,13 +11,13 @@ export default [
       "out/**",
       "**/node_modules/**",
       "**/.svelte-kit/**",
-      "modules/**/lib/**",
+      "modules/**/{lib,dist}/**",
       "data/**",
     ],
   },
   js.configs.recommended,
   tsPlugin.configs["flat/eslint-recommended"],
-  ...tsPlugin.configs["flat/recommended"],
+  ...(tsPlugin.configs["flat/recommended"] as unknown[]),
   {
     languageOptions: {
       globals: {
