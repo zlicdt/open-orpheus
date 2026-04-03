@@ -60,7 +60,8 @@ function computeLayers(modules: ModuleInfo[]): ModuleInfo[][] {
   const visiting = new Set<string>();
 
   function getLayer(mod: ModuleInfo): number {
-    if (layerCache.has(mod.packageName)) return layerCache.get(mod.packageName)!;
+    if (layerCache.has(mod.packageName))
+      return layerCache.get(mod.packageName)!;
     if (visiting.has(mod.packageName)) {
       throw new Error(
         `Circular dependency detected involving ${mod.packageName}`

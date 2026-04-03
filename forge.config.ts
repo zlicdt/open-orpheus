@@ -33,8 +33,27 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ["darwin"]),
-    new MakerRpm({}),
-    new MakerDeb({}),
+    new MakerRpm({
+      options: {
+        icon: "assets/icon.png",
+        name: "open-orpheus",
+        productName: "Open Orpheus",
+        description: "An open-source Netease Cloud Music client",
+        license: "MIT",
+        homepage: "https://github.com/YUCLing/open-orpheus",
+        categories: ["Audio", "AudioVideo", "Network"],
+      },
+    }),
+    new MakerDeb({
+      options: {
+        icon: "assets/icon.png",
+        name: "open-orpheus",
+        productName: "Open Orpheus",
+        description: "An open-source Netease Cloud Music client",
+        homepage: "https://github.com/YUCLing/open-orpheus",
+        categories: ["Audio", "AudioVideo", "Network"],
+      },
+    }),
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
