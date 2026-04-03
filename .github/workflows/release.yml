@@ -37,7 +37,14 @@ jobs:
         run: |
           mkdir -p release-files
           find artifacts -type f | while read f; do
-            cp "$f" release-files/
+            case "$f" in
+              artifacts/squirrel-*/*)
+                case "$f" in
+                  *.exe) cp "$f" release-files/ ;;
+                esac
+                ;;
+              *) cp "$f" release-files/ ;;
+            esac
           done
 
       - name: Upload files to release
