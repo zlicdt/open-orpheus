@@ -1,4 +1,4 @@
-import { normalize } from "node:path";
+import { normalize, sep } from "node:path";
 
 import unzipper from "unzipper";
 
@@ -15,8 +15,8 @@ export default abstract class Pack {
   }
 
   protected normalizePath(path: string): string {
-    if (!path.startsWith("/")) {
-      path = "/" + path;
+    if (!path.startsWith("\\") && !path.startsWith("/")) {
+      path = sep + path;
     }
     return normalize(path);
   }

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
 import { open, stat } from "node:fs/promises";
+
 import unzipper from "unzipper";
 import Pack from "./Pack";
 
@@ -146,7 +147,7 @@ export default class SkinPack extends Pack {
     );
     for (const file of zipper.files) {
       if (file.type === "File") {
-        const key = this.normalizePath("/" + file.path);
+        const key = this.normalizePath(file.path);
         this.files.set(key, file);
       }
     }

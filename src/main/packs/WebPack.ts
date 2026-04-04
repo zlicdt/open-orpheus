@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
 import { open, stat } from "node:fs/promises";
+import { sep } from "node:path";
+
 import unzipper from "unzipper";
 import Pack from "./Pack";
 
@@ -68,7 +70,7 @@ export default class WebPack extends Pack {
     const zipper = await unzipper.Open.custom(createSource(this.path));
     for (const file of zipper.files) {
       if (file.type === "File") {
-        this.files.set(this.normalizePath("/" + file.path), file);
+        this.files.set(this.normalizePath(file.path), file);
       }
     }
   }
