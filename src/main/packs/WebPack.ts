@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
 import { open, stat } from "node:fs/promises";
-import { sep } from "node:path";
 
 import unzipper from "unzipper";
 import Pack from "./Pack";
