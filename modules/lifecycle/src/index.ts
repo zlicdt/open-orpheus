@@ -11,6 +11,7 @@ type LifecycleState = {
   finalizationRegistry: FinalizationRegistry<FinalizationRegistryHandler>;
 };
 
+// We use a global symbol to store lifecycle state, so that multiple instances (CommonJS or ESM) of this module can coexist without interfering with each other.
 const LIFECYCLE_KEY = Symbol.for("@open-orpheus/lifecycle");
 const g = globalThis as typeof globalThis & {
   [LIFECYCLE_KEY]?: LifecycleState;
@@ -39,7 +40,7 @@ if (!g[LIFECYCLE_KEY]) {
 
   const signalHandler = (signal: NodeJS.Signals) => {
     finalize();
-    if (process.listenerCount(signal) === 0) {
+    if (process.listenerCount(signal) <= 1) { // Only this handler is left, so it's safe to exit
       process.exit(signal === "SIGINT" ? 130 : 143); // 128 + signal number, per convention
     }
   };

@@ -12,6 +12,7 @@ import { mkdir } from "node:fs/promises";
 import started from "electron-squirrel-startup";
 
 import { isWayland } from "@open-orpheus/window";
+import { onExit } from "@open-orpheus/lifecycle";
 
 // Handle errors as early as possible
 import "./main/error";
@@ -177,6 +178,10 @@ app.on("ready", async () => {
 
     createDesktopLyricsWindow();
     createWindow();
+
+    onExit(() => {
+      app.quit(); // Graceful exit
+    });
 
     appStarted = true;
   } catch (error) {
