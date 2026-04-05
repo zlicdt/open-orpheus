@@ -20,5 +20,11 @@
     "description": "An open-source Netease Cloud Music client",
     "homepage": "https://github.com/YUCLing/open-orpheus",
     "categories": ["Audio", "AudioVideo", "Network"]
+  },
+  "AppImage": {
+    "name": "open-orpheus",
+    "productName": "Open Orpheus",
+    "icon": "assets/icon.png",
+    "categories": ["Audio", "AudioVideo", "Music", "Network"]
   }
 }

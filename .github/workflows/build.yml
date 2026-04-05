@@ -49,6 +49,13 @@ jobs:
           path: out/make/rpm/**
           if-no-files-found: ignore
 
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: AppImage-${{ inputs.runner }}
+          path: out/make/AppImage/**
+          if-no-files-found: ignore
+
       - name: Upload squirrel
         uses: actions/upload-artifact@v7
         with:
