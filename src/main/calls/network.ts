@@ -99,10 +99,13 @@ registerCallHandler<
   // All retries exhausted
   return [
     {
-      code: 1,
+      code: 28,
       error:
         (lastError as Error)?.message ||
         (lastError ? String(lastError) : "Unknown error"),
+      status: 0,
+      blob: "",
+      headers: {},
       retryTimes: request.retryCount - lastAttempt - 1,
     },
   ];
