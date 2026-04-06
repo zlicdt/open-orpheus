@@ -13,7 +13,26 @@ What else do you expect! It just provides a environment for the original client!
 
 ## Installation
 
-Uhh, this project is not end-user ready now! Sorry!
+### Fedora Linux
+
+[![Copr build status](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/)
+
+You can install via the Copr repository:
+
+```sh
+dnf copr enable luorain/open-orpheus # Enable Copr repository
+dnf install open-orpheus # Install
+```
+
+### Arch Linux (third-party AUR)
+
+Published by @zlicdt, thanks!
+
+https://aur.archlinux.org/packages/open-orpheus
+
+### Debian Linux, AppImage, Windows, macOS
+
+Download from [Releases](https://github.com/YUCLing/open-orpheus/releases/latest)
 
 ## Development
 

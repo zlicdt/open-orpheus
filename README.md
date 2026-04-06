@@ -17,6 +17,8 @@
 
 ### Fedora Linux
 
+[![Copr build status](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/)
+
 可通过 Copr 仓库进行安装
 
 ```sh
@@ -30,7 +32,7 @@ dnf install open-orpheus # 安装
 
 https://aur.archlinux.org/packages/open-orpheus
 
-### Debian Linux、Windows、macOS
+### Debian Linux、AppImage、Windows、macOS
 
 前往 [Releases](https://github.com/YUCLing/open-orpheus/releases/latest) 下载
 
