@@ -15,7 +15,24 @@
 
 ## 安装
 
-呃，这个项目现在还没到能给终端用户直接用的程度，抱歉！
+### Fedora Linux
+
+可通过 Copr 仓库进行安装
+
+```sh
+dnf copr enable luorain/open-orpheus # 启用 Copr 仓库
+dnf install open-orpheus # 安装
+```
+
+### Arch Linux（第三方AUR）
+
+感谢 @zlicdt 发布
+
+https://aur.archlinux.org/packages/open-orpheus
+
+### Debian Linux、Windows、macOS
+
+前往 [Releases](https://github.com/YUCLing/open-orpheus/releases/latest) 下载
 
 ## 开发
 
