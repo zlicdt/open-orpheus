@@ -61,7 +61,7 @@ export function getSkinPack() {
 }
 
 export async function getOrWaitSkinPack() {
-  if (skinPack) {
+  if (skinPack && skinPack.isLoaded) {
     return skinPack;
   }
   return await new Promise<SkinPack>((resolve) => {

@@ -151,6 +151,8 @@ export default class SkinPack extends Pack {
         this.files.set(key, file);
       }
     }
+
+    this._isLoaded = true;
   }
 
   async readFile(path: string): Promise<Buffer> {

@@ -72,6 +72,7 @@ export default class WebPack extends Pack {
         this.files.set(this.normalizePath(file.path), file);
       }
     }
+    this._isLoaded = true;
   }
 
   async readFile(path: string): Promise<Buffer> {
