@@ -82,4 +82,9 @@ export default class WebPack extends Pack {
     }
     return await file.buffer();
   }
+
+  async getCommitHash(): Promise<string> {
+    const file = await this.readFile("/pub/COMMITHASH");
+    return file.toString("utf-8").trim();
+  }
 }

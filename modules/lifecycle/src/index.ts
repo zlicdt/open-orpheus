@@ -40,7 +40,8 @@ if (!g[LIFECYCLE_KEY]) {
 
   const signalHandler = (signal: NodeJS.Signals) => {
     finalize();
-    if (process.listenerCount(signal) <= 1) { // Only this handler is left, so it's safe to exit
+    if (process.listenerCount(signal) <= 1) {
+      // Only this handler is left, so it's safe to exit
       process.exit(signal === "SIGINT" ? 130 : 143); // 128 + signal number, per convention
     }
   };

@@ -64,6 +64,11 @@ const config: ForgeConfig = {
           target: "preload",
         },
         {
+          entry: "src/windows/manage.ts",
+          config: "vite.preload.config.ts",
+          target: "preload",
+        },
+        {
           entry: "src/windows/package-download.ts",
           config: "vite.preload.config.ts",
           target: "preload",

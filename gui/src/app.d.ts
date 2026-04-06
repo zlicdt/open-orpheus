@@ -14,6 +14,8 @@ declare global {
   interface Window {
     desktopLyrics?: DesktopLyricsAPI;
   }
+
+  const __APP_VERSION__: string;
 }
 
 export {};

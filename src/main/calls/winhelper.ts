@@ -16,6 +16,7 @@ import {
 } from "../window";
 import { AppMenuItem } from "../menu";
 import { getApp } from "../ui";
+import showManageWindow from "../windows/manage";
 
 function shouldApplyScaleFactor() {
   // TODO: Confirm macOS desired behavior, Windows and Linux is already tested to be correct
@@ -310,21 +311,7 @@ registerCallHandler<MenuRequest, void>(
     }
     const onClick = (itemId: string | null) => {
       if (itemId === "manageOpenOrpheus") {
-        const newWnd = new BrowserWindow({
-          title: "管理 Open Orpheus",
-          width: 1000,
-          height: 600,
-          show: true,
-          webPreferences: {
-            partition: "open-orpheus",
-          },
-        });
-        newWnd.setMenuBarVisibility(false);
-        if (GUI_VITE_DEV_SERVER_URL) {
-          newWnd.loadURL(GUI_VITE_DEV_SERVER_URL);
-        } else {
-          newWnd.loadFile(path.join(__dirname, "gui/index.html"));
-        }
+        showManageWindow();
         return;
       }
       event.sender.send("channel.call", "winhelper.onmenuclick", itemId, id);

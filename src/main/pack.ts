@@ -8,6 +8,8 @@ import { pack as base } from "./folders";
 import WebPack from "./packs/WebPack";
 import SkinPack from "./packs/SkinPack";
 
+import versions from "../../versions.json";
+
 function chooseWebPackFile() {
   const webPack = resolve(base, "web.pack");
   if (existsSync(webPack)) {
@@ -76,17 +78,13 @@ export async function downloadPackage(
 ) {
   const files = ["common.skin", "dark.skin", "native.ntpk", "orpheus.ntpk"];
 
-  /* MUST: Update package download URL when changing target web pack version. */
-  const downloadUrl =
-    "https://d8.music.126.net/dmusic2/NeteaseCloudMusic_Music_official_3.1.29.205117_64.exe";
-
   onProgress?.({
     step: "downloading",
     downloadedBytes: 0,
     progress: 0,
   });
 
-  const response = await fetch(downloadUrl);
+  const response = await fetch(versions.downloadUrl);
   if (!response.ok) {
     throw new Error(`Failed to download web pack: ${response.statusText}`);
   }

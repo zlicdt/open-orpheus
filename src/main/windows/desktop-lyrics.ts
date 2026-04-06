@@ -4,10 +4,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { BrowserWindow, ipcMain } from "electron";
 import sharp from "sharp";
 
-import { setWindowId } from "./window";
-import { parseLrc } from "./lyrics";
-import { sanitizeRelativePath } from "./util";
-import { storage } from "./folders";
+import { setWindowId } from "../window";
+import { parseLrc } from "../lyrics";
+import { sanitizeRelativePath } from "../util";
+import { storage } from "../folders";
 
 let desktopLyricsWindow: BrowserWindow | null = null;
 let mainWnd: BrowserWindow | null = null;
