@@ -317,6 +317,7 @@ export default function registerAudioStreamer() {
         start(controller) {
           streamResponseIntoBuffer(sb, start, firstResp, controller)
             .then(() => {
+              controller.close();
               if (rangeHeader) backgroundFetchFull(sb);
             })
             .catch(() => {
