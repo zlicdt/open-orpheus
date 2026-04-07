@@ -24,15 +24,9 @@ pub fn get_font_definitions() -> FontDefinitions {
             .args(["-f", "%{family}\n", "sans-serif:lang=zh-cn"])
             .output()
         {
-            let fc_fonts = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .split(',')
-                .next()
-                .unwrap_or_default()
-                .trim()
-                .to_string();
+            let output_text = String::from_utf8_lossy(&output.stdout);
+            let first_line = output_text.lines().next().unwrap_or_default();
+            let fc_fonts = first_line.split(',').next().unwrap_or_default().trim();
 
             if !fc_fonts.is_empty() && !candidates.iter().any(|f| f == &fc_fonts) {
                 candidates.insert(0, fc_fonts);
