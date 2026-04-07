@@ -24,17 +24,19 @@ pub fn get_font_definitions() -> FontDefinitions {
             .args(["-f", "%{family}\n", "sans-serif:lang=zh-cn"])
             .output()
         {
-            let output_text = String::from_utf8_lossy(&output.stdout);
-            let first_line = output_text.lines().next().unwrap_or_default();
-            let fc_fonts = first_line.split(',').next().unwrap_or_default().trim();
+            if output.status.success() {
+                let output_text = String::from_utf8_lossy(&output.stdout);
+                let first_line = output_text.lines().next().unwrap_or_default();
+                let fc_fonts = first_line.split(',').next().unwrap_or_default().trim();
 
-            if !fc_fonts.is_empty() && !candidates.iter().any(|f| f == &fc_fonts) {
-                candidates.insert(0, fc_fonts);
+                if !fc_fonts.is_empty() && !candidates.iter().any(|f| f.as_str() == fc_fonts) {
+                    candidates.insert(0, fc_fonts.to_string());
+                }
             }
         }
     }
 
-    for font_name in candidates {
+    'search_font: for font_name in candidates {
         if let Ok(handles) = system_source.select_family_by_name(&font_name) {
             for handle in handles.fonts() {
                 if let Ok(font) = handle.load() {
@@ -51,7 +53,7 @@ pub fn get_font_definitions() -> FontDefinitions {
                     {
                         family.insert(0, font_name.clone());
                     }
-                    break;
+                    break 'search_font;
                 }
             }
         }
