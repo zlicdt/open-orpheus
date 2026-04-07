@@ -23,10 +23,7 @@ import registerOrpheusScheme from "./main/orpheus";
 // Channel module
 import "./main/channel";
 
-import { bindMainWindow as trayBindMainWindow } from "./main/tray";
-import createDesktopLyricsWindow, {
-  bindMainWindow as lyricsBindMainWindow,
-} from "./main/windows/desktop-lyrics";
+import createDesktopLyricsWindow from "./main/windows/desktop-lyrics";
 import { getWindowSizeStatus } from "./main/util";
 import { loadFromFile as loadCookiesFromFile } from "./main/cookie";
 import { data as dataDir, userdata as userdataDir } from "./main/folders";
@@ -37,6 +34,8 @@ import { loadWebPack, webPack } from "./main/pack";
 import { createApp } from "./main/ui";
 import registerGuiScheme from "./main/gui";
 import showPackgeDownloadWindow from "./main/windows/package-download";
+import registerAudioStreamer from "./main/audioStreamer";
+import { setMainWindow } from "./main/window";
 
 // This is flags is required because package window is shown before main window, and we don't want to quit the app when package window is closed for any reason.
 let appStarted = false;
@@ -66,6 +65,14 @@ protocol.registerSchemesAsPrivileged([
       corsEnabled: true,
     },
   },
+  {
+    scheme: "audio",
+    privileges: {
+      standard: true,
+      secure: true,
+      stream: true,
+    },
+  },
 ]);
 
 app.setPath("userData", userdataDir);
@@ -85,8 +92,7 @@ const createWindow = () => {
   // Load App URL
   mainWindow.loadURL("orpheus://orpheus/pub/app.html");
 
-  trayBindMainWindow(mainWindow);
-  lyricsBindMainWindow(mainWindow);
+  setMainWindow(mainWindow);
 
   [
     "maximize",
@@ -154,6 +160,7 @@ app.on("ready", async () => {
 
     registerOrpheusScheme();
     registerGuiScheme();
+    registerAudioStreamer();
 
     const defaultUserAgent = session.defaultSession.getUserAgent();
     session.defaultSession.setUserAgent(

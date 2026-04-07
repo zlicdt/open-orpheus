@@ -9,6 +9,12 @@ type WindowProperties = {
   customProps: Record<string, unknown>;
 };
 
+export let mainWindow: BrowserWindow | null = null;
+
+export function setMainWindow(wnd: BrowserWindow) {
+  mainWindow = wnd;
+}
+
 const windowProperties = new Map<number, WindowProperties>();
 
 function shouldRespectSizeConstraints(wnd: BrowserWindow) {

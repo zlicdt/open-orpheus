@@ -109,9 +109,9 @@ export type AudioPlayInfo = {
 export default class Player extends EventTarget {
   private _audio: HTMLAudioElement = new Audio();
   private _playInfo: AudioPlayInfo | null = null;
+  private _lyricContent: LyricContent | null = null;
 
   songInfo: SongInfo | null = null;
-  private _lyricContent: LyricContent | null = null;
 
   get lyricContent(): LyricContent | null {
     return this._lyricContent;
@@ -191,7 +191,8 @@ export default class Player extends EventTarget {
 
   async load(playInfo: AudioPlayInfo): Promise<HTMLAudioElement> {
     this._playInfo = playInfo;
-    this._audio.src = playInfo.musicurl;
+    this.dispatchEvent(new CustomEvent("playinfoupdate"));
+    this._audio.src = `audio://audio/${playInfo.songId}`;
     this._audio.load();
     return this._audio;
   }

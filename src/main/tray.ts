@@ -1,5 +1,6 @@
 import { Menu, NativeImage, Tray } from "electron";
 import os from "node:os";
+import { mainWindow } from "./window";
 
 let icon: NativeImage | null = null;
 let tooltip: string | null = null;
@@ -7,14 +8,8 @@ let menu: Menu | null = null;
 
 let trayIcon: Tray | null = null;
 
-let mainWnd: Electron.BrowserWindow | null = null;
-
 export function get(): Tray | null {
   return trayIcon;
-}
-
-export function bindMainWindow(mainWindow: Electron.BrowserWindow) {
-  mainWnd = mainWindow;
 }
 
 export function setIcon(newIcon: NativeImage) {
@@ -53,19 +48,19 @@ export function install() {
     trayIcon.setContextMenu(menu);
   }
   trayIcon.on("click", () => {
-    if (!mainWnd) return;
+    if (!mainWindow) return;
     // Linux can only receives click, so a different behavior is used
     // The `onclick` will be send when main window is invisible, and `onrightclick` will be send when main window is visible
-    mainWnd.webContents.send(
+    mainWindow.webContents.send(
       "channel.call",
-      os.platform() !== "linux" || !mainWnd.isVisible()
+      os.platform() !== "linux" || !mainWindow.isVisible()
         ? "trayicon.onclick"
         : "trayicon.onrightclick"
     );
   });
   trayIcon.on("right-click", () => {
-    if (!mainWnd) return;
-    mainWnd.webContents.send("channel.call", "trayicon.onrightclick");
+    if (!mainWindow) return;
+    mainWindow.webContents.send("channel.call", "trayicon.onrightclick");
   });
 }
 

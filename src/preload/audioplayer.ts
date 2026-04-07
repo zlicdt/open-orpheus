@@ -5,6 +5,7 @@ import Player, { AudioPlayerState } from "./Player";
 export const player = new Player();
 
 let buffering = false;
+let bufferProgress = 0;
 
 function notifyBuffering(isBuffering: boolean) {
   if (buffering !== isBuffering) {
@@ -17,9 +18,13 @@ function notifyBuffering(isBuffering: boolean) {
   }
 }
 
+player.addEventListener("playinfoupdate", () => {
+  ipcRenderer.sendSync("audio.updatePlayInfo", player.currentPlayInfo);
+});
+
 player.addEventListener("load", (event) => {
   const { id } = (event as CustomEvent).detail;
-  console.log(`Audio loaded in preload for id: ${id}`);
+  bufferProgress = 0;
   fireNativeCall("audioplayer.onLoad", id, {
     activeCode: 0,
     code: 0,
@@ -97,10 +102,6 @@ player.audio.addEventListener("playing", () => {
 });
 
 const onPlayProgress = () => {
-  const bufferProgress = player.audio.buffered.length
-    ? player.audio.buffered.end(player.audio.buffered.length - 1) /
-      player.audio.duration
-    : 0;
   fireNativeCall(
     "audioplayer.onPlayProgress",
     player.currentId,
@@ -109,7 +110,10 @@ const onPlayProgress = () => {
   );
 };
 player.audio.addEventListener("timeupdate", onPlayProgress);
-player.audio.addEventListener("progress", onPlayProgress);
+ipcRenderer.on("audio.onProgress", (event, progress) => {
+  bufferProgress = progress;
+  onPlayProgress();
+});
 
 player.audio.addEventListener("volumechange", () => {
   fireNativeCall(

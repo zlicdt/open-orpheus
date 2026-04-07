@@ -4,17 +4,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { BrowserWindow, ipcMain } from "electron";
 import sharp from "sharp";
 
-import { setWindowId } from "../window";
+import { mainWindow, setWindowId } from "../window";
 import { parseLrc } from "../lyrics";
 import { sanitizeRelativePath } from "../util";
 import { storage } from "../folders";
 
 let desktopLyricsWindow: BrowserWindow | null = null;
-let mainWnd: BrowserWindow | null = null;
-
-export function bindMainWindow(mainWindow: BrowserWindow) {
-  mainWnd = mainWindow;
-}
 
 function sendToLyricsWindow(channel: string, data: unknown) {
   if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
@@ -48,8 +43,8 @@ export default function createDesktopLyricsWindow() {
   desktopLyricsWindow.webContents.ipc.handle(
     "desktopLyrics.requestFullUpdate",
     () => {
-      if (mainWnd && !mainWnd.isDestroyed()) {
-        mainWnd.webContents.send("desktopLyrics.sendFullState");
+      if (mainWindow) {
+        mainWindow.webContents.send("desktopLyrics.sendFullState");
       }
     }
   );
@@ -57,8 +52,8 @@ export default function createDesktopLyricsWindow() {
   desktopLyricsWindow.webContents.ipc.handle(
     "desktopLyrics.performAction",
     (_event, action: string) => {
-      if (mainWnd && !mainWnd.isDestroyed()) {
-        mainWnd.webContents.send(
+      if (mainWindow) {
+        mainWindow.webContents.send(
           "channel.call",
           "player.ondesktoplyricaction",
           action
