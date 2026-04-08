@@ -7,7 +7,7 @@ import { storage as storageDir, httpCache } from "./folders";
 import { readFile } from "node:fs/promises";
 import { URLCacheManager } from "./cache/URLCacheManager";
 
-const urlCache = new URLCacheManager(httpCache);
+export const urlCache = new URLCacheManager(httpCache);
 
 class NetworkError extends Error {
   constructor(message: string, options?: ErrorOptions) {

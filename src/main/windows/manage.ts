@@ -1,7 +1,11 @@
-import path from "node:path";
+import path, { resolve } from "node:path";
+import { readdir, stat, rm } from "node:fs/promises";
 
 import { BrowserWindow } from "electron";
 import { webPack } from "../pack";
+import { playCacheManager } from "../cache/PlayCacheManager";
+import { urlCache } from "../orpheus";
+import { lyricCache } from "../folders";
 
 export default function showManageWindow() {
   const manageWnd = new BrowserWindow({
@@ -23,4 +27,53 @@ export default function showManageWindow() {
   manageWnd.webContents.ipc.handle("manage.getWebPackCommitHash", async () => {
     return webPack.getCommitHash();
   });
+
+  manageWnd.webContents.ipc.handle("manage.getCacheStats", async () => {
+    const [playCacheInfo, httpStats, lyrics] = await Promise.all([
+      playCacheManager.getInfo(),
+      urlCache.getStats(),
+      (async () => {
+        try {
+          const entries = await readdir(lyricCache, { withFileTypes: true });
+          const files = entries.filter((e) => e.isFile());
+          let sizeBytes = 0;
+          await Promise.all(
+            files.map(async (f) => {
+              try {
+                const s = await stat(resolve(lyricCache, f.name));
+                sizeBytes += s.size;
+              } catch {
+                // Skip
+              }
+            })
+          );
+          return { entryCount: files.length, sizeBytes };
+        } catch {
+          return { entryCount: 0, sizeBytes: 0 };
+        }
+      })(),
+    ]);
+
+    return {
+      play: {
+        entryCount: (await playCacheManager.queryCacheTracks()).length,
+        sizeBytes: Math.round(
+          playCacheInfo.currentCachedSize * 1024 * 1024 * 1024
+        ),
+      },
+      http: httpStats,
+      lyrics,
+    };
+  });
+
+  manageWnd.webContents.ipc.handle(
+    "manage.clearCache",
+    async (_, category: "http" | "lyrics") => {
+      if (category === "http") {
+        await urlCache.clear();
+      } else if (category === "lyrics") {
+        await rm(lyricCache, { recursive: true, force: true });
+      }
+    }
+  );
 }

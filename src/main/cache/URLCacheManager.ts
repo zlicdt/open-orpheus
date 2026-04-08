@@ -7,6 +7,7 @@ import {
   stat,
   utimes,
   mkdir,
+  rm,
 } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -95,6 +96,33 @@ export class URLCacheManager {
     await writeFile(filePath, this.encode(contentType, body));
     this.entries.set(key, Date.now());
     await this.evictIfNeeded();
+  }
+
+  async getStats(): Promise<{ entryCount: number; sizeBytes: number }> {
+    await this.initPromise;
+    const entryCount = this.entries.size;
+    let sizeBytes = 0;
+    await Promise.all(
+      [...this.entries.keys()].map(async (name) => {
+        try {
+          const s = await stat(resolve(this.cacheDir, name));
+          sizeBytes += s.size;
+        } catch {
+          // File may have been evicted
+        }
+      })
+    );
+    return { entryCount, sizeBytes };
+  }
+
+  async clear(): Promise<void> {
+    await this.initPromise;
+    try {
+      await rm(this.cacheDir, { recursive: true, force: true });
+    } catch {
+      // Already gone
+    }
+    this.entries.clear();
   }
 
   async getOrFetch(
