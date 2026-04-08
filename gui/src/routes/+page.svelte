@@ -47,7 +47,7 @@
       <Sidebar.Group>
         <Sidebar.GroupContent>
           <Sidebar.Menu>
-            {#each items as item}
+            {#each items as item (item.id)}
               <Sidebar.MenuItem>
                 <Sidebar.MenuButton>
                   {#snippet child({ props })}
@@ -62,7 +62,7 @@
     </Sidebar.Content>
   </Sidebar.Root>
   <main class="h-screen overflow-y-auto p-4">
-    {#each items as item, i}
+    {#each items as item, i (item.id)}
       <div class="my-4" class:mt-0={i === 0} id={item.id}>
         <item.component />
       </div>
