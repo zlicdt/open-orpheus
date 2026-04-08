@@ -188,6 +188,7 @@ registerCallHandler<
   if (!wnd) return;
   const cachedTrack = await playCacheManager.getCachedTrack(track.trackId);
   if (
+    !cachedTrack ||
     track.bitrate !== cachedTrack.meta.bitrate ||
     (track.md5 && track.md5 !== cachedTrack.meta.md5)
   )
