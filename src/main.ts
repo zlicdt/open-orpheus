@@ -46,6 +46,12 @@ if (started) {
   app.quit();
 }
 
+// Enforce single instance
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
+
 // Register privileged schemes
 protocol.registerSchemesAsPrivileged([
   {
@@ -224,4 +230,12 @@ app.on("activate", () => {
 app.on("before-quit", () => {
   // Allow main window to be closed.
   quitting = true;
+});
+
+app.on("second-instance", () => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
 });
