@@ -77,8 +77,6 @@ function onComplete(): void {
   const sb = songBuffer;
   const playInfo = currentAudioPlayInfo;
 
-  console.log("playInfo", playInfo);
-
   playCacheManager
     .cacheTrack(sb.songId, sb.buffer, {
       md5: playInfo.md5,
