@@ -8,6 +8,7 @@ import { getWebDb } from "../database";
 import { existsSync, mkdirSync } from "node:fs";
 import { app } from "electron";
 import {
+  CacheTrackMeta,
   playCacheManager,
   type PlayCacheConfig,
   type PlayCacheInfo,
@@ -171,6 +172,27 @@ registerCallHandler<[], void>("storage.queryCacheTracks", async (event) => {
   const tracks = await playCacheManager.queryCacheTracks();
   wnd.send("channel.call", "storage.onquerycachetracks", tracks);
   return;
+});
+
+registerCallHandler<
+  [
+    {
+      trackId: string;
+      bitrate: number;
+      md5: string;
+    },
+  ],
+  [CacheTrackMeta | null]
+>("storage.queryNewCacheTrack", async (event, track) => {
+  const wnd = event.sender;
+  if (!wnd) return;
+  const cachedTrack = await playCacheManager.getCachedTrack(track.trackId);
+  if (
+    track.bitrate !== cachedTrack.meta.bitrate ||
+    (track.md5 && track.md5 !== cachedTrack.meta.md5)
+  )
+    return [null];
+  return [cachedTrack.meta];
 });
 
 registerCallHandler<[PlayCacheConfig], void>(
