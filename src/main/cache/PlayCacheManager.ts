@@ -267,6 +267,20 @@ class PlayCacheManager {
     }
   }
 
+  async clearAll(): Promise<void> {
+    await this.ready();
+    const tracks = Array.from(this.trackIndex.values());
+    this.trackIndex.clear();
+    try {
+      await rm(playCache, { recursive: true, force: true });
+    } catch {
+      // Already gone
+    }
+    for (const meta of tracks) {
+      this.notifyPlayCacheUpdate(meta, 2);
+    }
+  }
+
   // #endregion
 
   // #region Helpers

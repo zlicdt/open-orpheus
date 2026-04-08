@@ -208,6 +208,15 @@ registerCallHandler<[], [PlayCacheInfo]>("storage.playCacheInfo", async () => {
   return [info];
 });
 
+registerCallHandler<[""], [boolean]>("storage.clearCache", async () => {
+  try {
+    await playCacheManager.clearAll();
+    return [true];
+  } catch {
+    return [false];
+  }
+});
+
 registerCallHandler<[string], void>(
   "storage.getTempFile",
   async (event, songId) => {
