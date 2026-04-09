@@ -1,5 +1,3 @@
-import { Menu } from "@open-orpheus/ui";
-
 export type AppMenuItem = {
   text: string;
   menu: boolean;
@@ -12,4 +10,4 @@ export type AppMenuItem = {
   menu_id: string | null;
 };
 
-export type AppMenu = Menu;
+export type AppMenu = unknown;
