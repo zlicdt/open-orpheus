@@ -53,3 +53,21 @@ export interface DesktopLyricsPreviewAPI {
   requestInit(): Promise<{ style: Record<string, unknown>; text: string }>;
   ready(): void;
 }
+
+export interface MenuAPI {
+  onShow(
+    callback: (
+      items: unknown[],
+      templates: Record<string, string>,
+      cursorX: number,
+      cursorY: number
+    ) => void
+  ): void;
+  onUpdate(callback: (items: unknown[]) => void): void;
+  pull(): Promise<{ items: unknown[]; templates: Record<string, string> }>;
+  reportSize(width: number, height: number): void;
+  itemClick(menuId: string | null): void;
+  btnClick(btnId: string): void;
+  close(): void;
+  isWayland(): boolean;
+}

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from "electron";
 
-import { AppMenu } from "./menu";
+import AppMenu from "./menu";
 
 type WindowProperties = {
   id?: string;

@@ -13,7 +13,7 @@ import {
   setMaximumSize,
   setMinimumSize,
 } from "../window";
-import { AppMenuItem } from "../menu";
+import AppMenu, { AppMenuItem } from "../menu";
 import showManageWindow from "../windows/manage";
 
 function shouldApplyScaleFactor() {
@@ -267,10 +267,7 @@ registerCallHandler<MenuRequest, void>(
       return;
     }
     const menuItems = JSON.parse(data.content) as AppMenuItem[];
-    for (const item of menuItems) {
-      // TODO: why `mine.svg` for `openVinylPage` update?
-      console.warn("winhelper.updateMenu is not implemented yet.", item);
-    }
+    menu.update(menuItems);
   }
 );
 
@@ -314,8 +311,10 @@ registerCallHandler<MenuRequest, void>(
       }
       event.sender.send("channel.call", "winhelper.onmenuclick", itemId, id);
     };
-    // TODO: show menus
-    console.warn("winhelper.popupMenu is not implemented yet.", menus, onClick);
+    const menu = new AppMenu(parsedMenuData.content);
+    menus.set(id, menu);
+    menu.setClickHandler(onClick);
+    menu.show();
   }
 );
 

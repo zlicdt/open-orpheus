@@ -32,7 +32,7 @@ import { initializeDatabases } from "./main/database";
 import { loadWebPack, webPack } from "./main/pack";
 import registerGuiScheme from "./main/gui";
 import showPackgeDownloadWindow from "./main/windows/package-download";
-import registerAudioStreamer from "./main/audioStreamer";
+import registerAudioStreamerScheme from "./main/audioStreamer";
 import { setMainWindow } from "./main/window";
 
 // This is flags is required because package window is shown before main window, and we don't want to quit the app when package window is closed for any reason.
@@ -162,9 +162,12 @@ app.on("ready", async () => {
     // Make sure data directory exists
     await mkdir(path.join(dataDir), { recursive: true });
 
-    registerOrpheusScheme();
-    registerGuiScheme();
-    registerAudioStreamer();
+    const sess = session.fromPartition("open-orpheus");
+
+    registerOrpheusScheme(protocol);
+    registerOrpheusScheme(sess.protocol);
+    registerGuiScheme(sess.protocol);
+    registerAudioStreamerScheme(protocol);
 
     const defaultUserAgent = session.defaultSession.getUserAgent();
     session.defaultSession.setUserAgent(

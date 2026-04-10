@@ -1,16 +1,15 @@
 import { extname, join, normalize } from "node:path";
 import { readFile } from "node:fs/promises";
 
-import { session } from "electron";
+import { Protocol } from "electron";
 import mime from "mime";
 
 import { getOrWaitSkinPack } from "./pack";
 
 const guiDir = join(__dirname, "gui");
 
-export default function () {
-  const sess = session.fromPartition("open-orpheus");
-  sess.protocol.handle("gui", async (request) => {
+export default function registerGuiScheme(protocol: Protocol) {
+  protocol.handle("gui", async (request) => {
     const url = new URL(request.url);
     switch (url.hostname) {
       case "skin": {

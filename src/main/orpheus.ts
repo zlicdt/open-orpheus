@@ -1,4 +1,4 @@
-import { protocol } from "electron";
+import { Protocol } from "electron";
 import mime from "mime";
 import { extname } from "node:path";
 import { webPack } from "./pack";
@@ -95,7 +95,7 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
   }
 }
 
-export default function () {
+export default function registerOrpheusScheme(protocol: Protocol) {
   protocol.handle("orpheus", async (request) => {
     try {
       const { content, contentType, cacheable } = await loadFromOrpheusUrl(

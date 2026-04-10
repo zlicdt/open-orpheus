@@ -1,4 +1,4 @@
-import { ipcMain, protocol } from "electron";
+import { ipcMain, Protocol } from "electron";
 import type { AudioPlayInfo } from "../preload/Player";
 import { mainWindow } from "./window";
 import { playCacheManager } from "./cache/PlayCacheManager";
@@ -266,7 +266,7 @@ ipcMain.on("audio.updatePlayInfo", (event, playInfo: AudioPlayInfo | null) => {
 
 // #region Protocol handler
 
-export default function registerAudioStreamer() {
+export default function registerAudioStreamerScheme(protocol: Protocol) {
   protocol.handle("audio", async (request) => {
     const requestUrl = new URL(request.url);
     if (requestUrl.hostname !== "audio")
