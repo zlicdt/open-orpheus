@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { MenuSkin } from "../main/menu";
+import type { MenuSkin } from "../main/menu/types";
 
 export interface MenuAPI {
   onShow(

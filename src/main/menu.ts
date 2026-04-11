@@ -3,200 +3,23 @@ import { join, normalize } from "node:path";
 
 import { isWayland } from "@open-orpheus/window";
 
+import { menuSkin, registerMenuSkinUpdater } from "./menu/skin";
+import type { AppMenuItem, MenuClickHandler } from "./menu/types";
+import { patchById } from "./menu/types";
+import {
+  createOverlayWindow,
+  destroyOverlayWindow,
+  getMenuWindow,
+  getOrCreateMenuWindow,
+  getOverlayWindow,
+  hideMenuWindow,
+} from "./menu/windows";
 import packManager from "./pack";
 import SkinPack from "./packs/SkinPack";
-import sharp, { SharpInput } from "sharp";
 
-export type AppMenuItemBtn = {
-  id: string;
-  url: string;
-  enable: boolean;
-};
+registerMenuSkinUpdater();
 
-export type AppMenuItem = {
-  text: string;
-  menu: boolean;
-  enable: boolean;
-  separator: boolean;
-  children: AppMenuItem[] | null;
-  hotkey?: string;
-  image_color: string;
-  image_path?: string;
-  check_image_path?: string;
-  menu_id: string | null;
-  style?: string;
-  btns?: AppMenuItemBtn[];
-};
-
-type MenuClickHandler = (menuId: string | null) => void;
-
-export type MenuSkin = {
-  background: string;
-  foreground: string;
-  foregroundDisabled: string;
-  separator: string;
-  itemHover: string;
-};
-
-const menuSkin: MenuSkin = {
-  background: "#fffffffa",
-  foreground: "#1e1e1e",
-  foregroundDisabled: "#a0a0a0",
-  separator: "#0000001a",
-  itemHover: "#e1ebfc",
-};
-
-function patchById(items: AppMenuItem[], patch: AppMenuItem): boolean {
-  for (let i = 0; i < items.length; i++) {
-    if (items[i].menu_id === patch.menu_id) {
-      items[i] = patch;
-      return true;
-    }
-    if (items[i].children && patchById(items[i].children!, patch)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-async function extractColor(img: SharpInput): Promise<string> {
-  const image = sharp(img);
-  const { width = 1, height = 1 } = await image.metadata();
-  const cx = Math.floor(width / 2);
-  const cy = Math.floor(height / 2);
-  const { data } = await image
-    .extract({ left: cx, top: cy, width: 1, height: 1 })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const [r, g, b, a] = data;
-  return `#${[r, g, b, a].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function abgrToCssHex(abgr: string): string {
-  const hex = abgr.replace(/^#/, "");
-  const a = hex.slice(0, 2);
-  const b = hex.slice(2, 4);
-  const g = hex.slice(4, 6);
-  const r = hex.slice(6, 8);
-  return `#${r}${g}${b}${a}`;
-}
-
-packManager.addEventListener("skin2packloaded", async (e: CustomEvent) => {
-  console.log("skinpackloaded", e.detail);
-  const skinPack = packManager.getPack<SkinPack>("skin2");
-  const [bg, hov, sep, elBuf] = await Promise.all(
-    [
-      "/menu/bk.png",
-      "/menu/hover.png",
-      "/menu/separator.png",
-      "/menu/element.xml",
-    ].map((p) => skinPack.readFile(p))
-  );
-  const [bgColor, hoverColor, separatorColor] = await Promise.all(
-    [bg, hov, sep].map(extractColor)
-  );
-
-  const xml = elBuf.toString("utf-8");
-  const fgMatch = xml.match(/\btextcolor="(#[0-9A-Fa-f]{8})"/);
-  const fgDisabledMatch = xml.match(/\bdisabledtextcolor="(#[0-9A-Fa-f]{8})"/);
-
-  console.log(
-    "colors",
-    bgColor,
-    hoverColor,
-    separatorColor,
-    fgMatch,
-    fgDisabledMatch
-  );
-
-  menuSkin.background = bgColor;
-  menuSkin.itemHover = hoverColor;
-  menuSkin.separator = separatorColor;
-  if (fgMatch) menuSkin.foreground = abgrToCssHex(fgMatch[1]);
-  if (fgDisabledMatch)
-    menuSkin.foregroundDisabled = abgrToCssHex(fgDisabledMatch[1]);
-});
-
-// Shared menu window singleton (non-Wayland only)
-let menuWindow: BrowserWindow | null = null;
-
-// Per-show overlay window (Wayland only) — created fresh each time,
-// destroyed on close so the compositor sends pointer-enter on the next show.
-let overlayWindow: BrowserWindow | null = null;
-
-function getOrCreateMenuWindow(): BrowserWindow {
-  if (menuWindow && !menuWindow.isDestroyed()) {
-    return menuWindow;
-  }
-
-  menuWindow = new BrowserWindow({
-    width: 300,
-    height: 400,
-    show: false,
-    frame: false,
-    transparent: true,
-    hasShadow: true,
-    skipTaskbar: true,
-    resizable: false,
-    alwaysOnTop: true,
-    focusable: true,
-    webPreferences: {
-      partition: "open-orpheus",
-      preload: join(__dirname, "menu.js"),
-    },
-  });
-
-  if (GUI_VITE_DEV_SERVER_URL) {
-    menuWindow.loadURL(`${GUI_VITE_DEV_SERVER_URL}/menu`);
-  } else {
-    menuWindow.loadURL("gui://frontend/menu");
-  }
-
-  menuWindow.on("closed", () => {
-    menuWindow = null;
-  });
-
-  return menuWindow;
-}
-
-function createOverlayWindow(): BrowserWindow {
-  // Destroy any leftover overlay from a previous show
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.destroy();
-    overlayWindow = null;
-  }
-
-  overlayWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
-    frame: false,
-    transparent: true,
-    hasShadow: false,
-    skipTaskbar: true,
-    resizable: true,
-    alwaysOnTop: true,
-    focusable: true,
-    fullscreen: true,
-    webPreferences: {
-      partition: "open-orpheus",
-      preload: join(__dirname, "menu.js"),
-      additionalArguments: ["--wayland"],
-    },
-  });
-
-  if (GUI_VITE_DEV_SERVER_URL) {
-    overlayWindow.loadURL(`${GUI_VITE_DEV_SERVER_URL}/menu`);
-  } else {
-    overlayWindow.loadURL("gui://frontend/menu");
-  }
-
-  overlayWindow.on("closed", () => {
-    overlayWindow = null;
-  });
-
-  return overlayWindow;
-}
+export type { AppMenuItem, AppMenuItemBtn, MenuSkin } from "./menu/types";
 
 export default class AppMenu extends EventTarget {
   private onClick: MenuClickHandler | null = null;
@@ -264,16 +87,9 @@ export default class AppMenu extends EventTarget {
     }
 
     if (process.platform === "linux" && isWayland()) {
-      // Destroy the overlay so the next show() creates a fresh window
-      // and the compositor sends pointer-enter again.
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.destroy();
-        overlayWindow = null;
-      }
+      destroyOverlayWindow();
     } else {
-      if (menuWindow && !menuWindow.isDestroyed()) {
-        menuWindow.hide();
-      }
+      hideMenuWindow();
     }
     this.dispatchEvent(new Event("close"));
   }
@@ -285,6 +101,7 @@ export default class AppMenu extends EventTarget {
     }
 
     if (process.platform === "linux" && isWayland()) {
+      const overlayWindow = getOverlayWindow();
       if (
         overlayWindow &&
         !overlayWindow.isDestroyed() &&
@@ -295,6 +112,7 @@ export default class AppMenu extends EventTarget {
       return;
     }
 
+    const menuWindow = getMenuWindow();
     if (menuWindow && !menuWindow.isDestroyed() && menuWindow.isVisible()) {
       menuWindow.webContents.send("menu.update", this.items);
     }
