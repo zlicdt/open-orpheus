@@ -3,6 +3,7 @@ import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
+import { MakerFlatpak } from "@electron-forge/maker-flatpak";
 import { MakerAppImage } from "@reforged/maker-appimage";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
@@ -10,7 +11,7 @@ import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
 import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives"; // TODO: Remove in Electron Forge 8
 
-import options from "./packaging/options.json";
+import * as options from "./packaging/options";
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -37,13 +38,16 @@ const config: ForgeConfig = {
     new MakerSquirrel(options.squirrel),
     new MakerZIP({}, ["darwin"]),
     new MakerRpm({
-      options: options.rpm as unknown,
+      options: options.rpm,
     }),
     new MakerDeb({
-      options: options.deb as unknown,
+      options: options.deb,
+    }),
+    new MakerFlatpak({
+      options: options.flatpak,
     }),
     new MakerAppImage({
-      options: options.AppImage as unknown,
+      options: options.AppImage,
     }),
   ],
   plugins: [
