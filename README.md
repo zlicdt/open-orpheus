@@ -4,7 +4,7 @@
 
 一个对网易云音乐 Orpheus 浏览器宿主的开源实现。
 
-项目当前的开发计划请追踪：https://github.com/users/YUCLing/projects/2
+项目当前的开发计划请追踪：https://github.com/users/YUCLing/projects/3
 
 ## 功能
 

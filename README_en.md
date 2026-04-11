@@ -2,7 +2,7 @@
 
 An open-source implementation of Netease Cloud Music's Orpheus browser host.
 
-Track the project's current dev plans at https://github.com/users/YUCLing/projects/2
+Track the project's current dev plans at https://github.com/users/YUCLing/projects/3
 
 ## Features
 
