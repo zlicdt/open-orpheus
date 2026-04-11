@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { MenuSkin } from "../main/menu";
 
 export interface MenuAPI {
   onShow(
@@ -6,11 +7,16 @@ export interface MenuAPI {
       items: unknown[],
       templates: Record<string, string>,
       cursorX: number,
-      cursorY: number
+      cursorY: number,
+      colors: MenuSkin
     ) => void
   ): void;
   onUpdate(callback: (items: unknown[]) => void): void;
-  pull(): Promise<{ items: unknown[]; templates: Record<string, string> }>;
+  pull(): Promise<{
+    items: unknown[];
+    templates: Record<string, string>;
+    colors: MenuSkin;
+  }>;
   reportSize(width: number, height: number): void;
   itemClick(menuId: string | null): void;
   btnClick(btnId: string): void;
@@ -34,11 +40,14 @@ contextBridge.exposeInMainWorld("menuApi", {
       items: unknown[],
       templates: Record<string, string>,
       cursorX: number,
-      cursorY: number
+      cursorY: number,
+      colors: MenuSkin
     ) => void
   ) {
-    ipcRenderer.on("menu.show", (_event, items, templates, cursorX, cursorY) =>
-      callback(items, templates, cursorX, cursorY)
+    ipcRenderer.on(
+      "menu.show",
+      (_event, items, templates, cursorX, cursorY, colors) =>
+        callback(items, templates, cursorX, cursorY, colors)
     );
   },
   onUpdate(callback: (items: unknown[]) => void) {

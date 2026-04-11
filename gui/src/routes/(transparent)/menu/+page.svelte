@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import type { MenuAPI } from "$lib/types";
+  import type { MenuAPI, MenuSkin } from "$lib/types";
   import type { MenuItem, MenuItemBtn } from "./types";
   import { loadTemplates } from "./template";
   import MenuPanel from "./MenuPanel.svelte";
@@ -29,6 +29,15 @@
 
   function getApi(): MenuAPI {
     return window.menuApi!;
+  }
+
+  function applyColors(colors: MenuSkin) {
+    const root = document.documentElement;
+    root.style.setProperty("--menu-bg", colors.background);
+    root.style.setProperty("--menu-fg", colors.foreground);
+    root.style.setProperty("--menu-fg-disabled", colors.foregroundDisabled);
+    root.style.setProperty("--menu-separator", colors.separator);
+    root.style.setProperty("--menu-item-hover", colors.itemHover);
   }
 
   /** Once we know the cursor position, clamp the menu and make it visible. */
@@ -125,6 +134,7 @@
       const cursor = setupCursorCapture();
 
       api.pull().then((data) => {
+        applyColors(data.colors);
         loadTemplates(data.templates);
         items = data.items as MenuItem[];
         hoveredIndex = -1;
@@ -145,6 +155,7 @@
       });
     } else if (isSubmenuMode) {
       api.pull().then((data) => {
+        applyColors(data.colors);
         rawTemplates = data.templates;
         loadTemplates(data.templates);
         items = data.items as MenuItem[];
@@ -174,7 +185,8 @@
         ro.observe(menuEl);
       };
 
-      api.onShow((rawItems, templates, cx, cy) => {
+      api.onShow((rawItems, templates, cx, cy, colors) => {
+        applyColors(colors);
         rawTemplates = templates;
         loadTemplates(templates);
         items = rawItems as MenuItem[];

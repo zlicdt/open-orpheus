@@ -9,24 +9,31 @@ import SkinPack from "./packs/SkinPack";
 
 const guiDir = join(__dirname, "gui");
 
+async function loadSkinFileFromPack(
+  packName: "skin" | "skin2",
+  pathname: string
+) {
+  const skinPack = await packManager.getOrWaitPack<SkinPack>(packName);
+  try {
+    const file = await skinPack.readFile(normalize(pathname));
+    return new Response(Buffer.from(file), {
+      headers: {
+        "Content-Type":
+          mime.getType(extname(pathname)) || "application/octet-stream",
+      },
+    });
+  } catch {
+    return Response.error();
+  }
+}
+
 export default function registerGuiScheme(protocol: Protocol) {
   protocol.handle("gui", async (request) => {
     const url = new URL(request.url);
     switch (url.hostname) {
-      case "skin": {
-        const skinPack = await packManager.getOrWaitPack<SkinPack>("skin");
-        try {
-          const file = await skinPack.readFile(normalize(url.pathname));
-          return new Response(Buffer.from(file), {
-            headers: {
-              "Content-Type":
-                mime.getType(extname(url.pathname)) ||
-                "application/octet-stream",
-            },
-          });
-        } catch {
-          return Response.error();
-        }
+      case "skin":
+      case "skin2": {
+        return loadSkinFileFromPack(url.hostname, url.pathname);
       }
       case "frontend": {
         // Serve SvelteKit static build files.

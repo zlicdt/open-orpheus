@@ -44,15 +44,24 @@ export class PackManager extends EventTarget {
     this.dispatchEvent(new Event("webpackloaded"));
   }
 
-  async loadSkinPack(name: string) {
-    const skinPackPath = resolve(base, `${name}.skin`);
-    if (!existsSync(skinPackPath)) {
-      throw new Error(`Skin pack file not found: ${skinPackPath}`);
-    }
-    const sp = new SkinPack(skinPackPath);
-    await sp.readPack();
-    this.packs.set("skin", sp);
-    this.dispatchEvent(new Event("skinpackloaded"));
+  async loadSkinPack(name: string, name2: string) {
+    const loadOne = async (
+      packKey: "skin" | "skin2",
+      packName: string,
+      eventName: "skinpackloaded" | "skin2packloaded"
+    ) => {
+      const skinPackPath = resolve(base, `${packName}.skin`);
+      if (!existsSync(skinPackPath)) {
+        throw new Error(`Skin pack file not found: ${skinPackPath}`);
+      }
+      const skinPack = new SkinPack(skinPackPath);
+      await skinPack.readPack();
+      this.packs.set(packKey, skinPack);
+      this.dispatchEvent(new CustomEvent(eventName, { detail: packName }));
+    };
+
+    await loadOne("skin", name, "skinpackloaded");
+    await loadOne("skin2", name2, "skin2packloaded");
   }
 
   getPack<T extends Pack>(pack: string): T {
@@ -70,7 +79,7 @@ export class PackManager extends EventTarget {
     }
     return new Promise<T>((resolve) => {
       this.addEventListener(
-        `packloaded:${pack}`,
+        `${pack}packloaded`,
         () => resolve(this.packs.get(pack) as T),
         { once: true }
       );

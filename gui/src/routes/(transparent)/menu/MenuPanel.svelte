@@ -103,32 +103,41 @@
 {/snippet}
 
 <div
-  class="absolute max-w-80 min-w-58 overflow-hidden rounded-lg border border-black/12 bg-white/98 py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.15),0_1px_4px_rgba(0,0,0,0.1)] select-none"
+  class="absolute max-w-80 min-w-58 overflow-hidden rounded-lg py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.15),0_1px_4px_rgba(0,0,0,0.1)] select-none"
+  style="background-color: var(--menu-bg); {style ?? ''}"
   bind:this={el}
-  {style}
 >
   {#each items as item, i (i)}
     {#if item.separator}
-      <div class="mx-3 my-2 h-px bg-black/10"></div>
+      <div
+        class="mx-3 my-2 h-px"
+        style="background-color: var(--menu-separator)"
+      ></div>
     {:else if item.style && item.btns}
       {@render styledItem(item)}
     {:else}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        class="flex cursor-default items-center gap-3 px-4 py-2 text-sm whitespace-nowrap text-[#1e1e1e] transition-colors duration-50 {!item.enable
-          ? 'pointer-events-none text-[#a0a0a0]'
-          : ''} {hoveredIndex === i ? 'bg-[#e1ebfc] active:bg-[#c6d8f9]' : ''}"
+        class="flex cursor-default items-center gap-3 px-4 py-2 text-sm whitespace-nowrap transition-colors duration-50 {!item.enable
+          ? 'pointer-events-none'
+          : ''}"
+        style="color: {!item.enable
+          ? 'var(--menu-fg-disabled)'
+          : 'var(--menu-fg)'}; background-color: {hoveredIndex === i
+          ? 'var(--menu-item-hover)'
+          : ''}"
         onclick={() => onitemclick?.(item)}
         onmouseenter={(e) => onitemhover?.(i, item, e)}
         onmouseleave={() => onitemleave?.(i)}
       >
         {#if item.image_path}
-          <img
-            class="size-5 shrink-0 {!item.enable ? 'opacity-40' : ''}"
-            src={item.image_path}
-            alt=""
-          />
+          <span
+            class="size-5 shrink-0"
+            style="background-color: {!item.enable
+              ? 'var(--menu-fg-disabled)'
+              : 'var(--menu-fg)'}; mask-image: url('{item.image_path}'); -webkit-mask-image: url('{item.image_path}'); mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; mask-position: center; -webkit-mask-position: center; mask-size: contain; -webkit-mask-size: contain;"
+          ></span>
         {/if}
         <span class="flex-1">{item.text}</span>
         {#if item.check_image_path}
@@ -140,7 +149,7 @@
         {:else if showSubmenuArrows && item.menu && item.children?.length}
           <img
             class="ml-auto size-5 shrink-0 opacity-50"
-            src="gui://skin/menu/sub_icon.svg"
+            src="gui://skin2/menu/sub_icon.svg"
             alt=""
           />
         {/if}

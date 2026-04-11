@@ -125,14 +125,14 @@ registerCallHandler<[ThumbnailOptions], void>(
 
 registerCallHandler<[string, string], [boolean]>(
   "app.loadSkinPackets",
-  async (event, name) => {
+  async (event, name, name2) => {
     try {
-      await packManager.loadSkinPack(name);
+      await packManager.loadSkinPack(name, name2);
       return [true];
     } catch (e) {
       console.error("Failed to load skin pack", e);
-      return [false];
     }
+    return [false];
   }
 );
 
