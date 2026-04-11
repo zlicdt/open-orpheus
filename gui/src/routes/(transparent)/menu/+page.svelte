@@ -8,6 +8,7 @@
   let items: MenuItem[] = $state([]);
   let cursorX = $state(0);
   let cursorY = $state(0);
+  let menuTop = $state(0); // computed anchor Y (top of menu box)
   let visible = $state(false);
   let menuReady = $state(false);
   let hoveredIndex = $state(-1);
@@ -38,10 +39,16 @@
         const rect = menuEl.getBoundingClientRect();
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        if (cursorX + rect.width > vw) cursorX = vw - rect.width;
-        if (cursorY + rect.height > vh) cursorY = vh - rect.height;
-        if (cursorX < 0) cursorX = 0;
-        if (cursorY < 0) cursorY = 0;
+        // Anchor: top half → top-left at cursor; bottom half → bottom-left at cursor
+        const onBottomHalf = cursorY > vh / 2;
+        let top = onBottomHalf ? cursorY - rect.height : cursorY;
+        let left = cursorX;
+        if (left + rect.width > vw) left = vw - rect.width;
+        if (top + rect.height > vh) top = vh - rect.height;
+        if (left < 0) left = 0;
+        if (top < 0) top = 0;
+        cursorX = left;
+        menuTop = top;
       } else {
         const rect = menuEl.getBoundingClientRect();
         api.reportSize(Math.ceil(rect.width), Math.ceil(rect.height));
@@ -78,6 +85,7 @@
       cleanup();
       cursorX = e.clientX;
       cursorY = e.clientY;
+      menuTop = e.clientY; // will be corrected by commitMenuPosition
       finish();
     };
 
@@ -280,7 +288,7 @@
         onitemleave={handleItemLeave}
         onbtnclick={handleBtnClick}
         bind:el={menuEl}
-        style="left: {cursorX}px; top: {cursorY}px; visibility: {menuReady
+        style="left: {cursorX}px; top: {menuTop}px; visibility: {menuReady
           ? 'visible'
           : 'hidden'};"
       />

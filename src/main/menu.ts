@@ -287,8 +287,10 @@ export default class AppMenu extends EventTarget {
 
       // Clamp position so menu stays within the display
       const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
+      // Top half of work area → top-left anchor; bottom half → bottom-left anchor
+      const onBottomHalf = cursor.y > dy + dh / 2;
       let x = cursor.x;
-      let y = cursor.y;
+      let y = onBottomHalf ? cursor.y - height : cursor.y;
 
       if (x + width > dx + dw) x = dx + dw - width;
       if (y + height > dy + dh) y = dy + dh - height;
