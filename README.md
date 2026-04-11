@@ -32,7 +32,7 @@ dnf install open-orpheus # 安装
 
 https://aur.archlinux.org/packages/open-orpheus
 
-### Debian Linux、AppImage、Windows、macOS
+### Debian Linux、Flatpak、AppImage、Windows、macOS
 
 前往 [Releases](https://github.com/YUCLing/open-orpheus/releases/latest) 下载
 

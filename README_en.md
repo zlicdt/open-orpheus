@@ -30,7 +30,7 @@ Published by @zlicdt, thanks!
 
 https://aur.archlinux.org/packages/open-orpheus
 
-### Debian Linux, AppImage, Windows, macOS
+### Debian Linux, Flatpak, AppImage, Windows, macOS
 
 Download from [Releases](https://github.com/YUCLing/open-orpheus/releases/latest)
 
