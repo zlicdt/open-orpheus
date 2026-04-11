@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import { BrowserWindow } from "electron";
-import { downloadPackage } from "../pack";
+import packManager from "../pack";
 
 export default function showPackgeDownloadWindow(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -24,7 +24,7 @@ export default function showPackgeDownloadWindow(): Promise<void> {
       wnd.loadURL("gui://frontend/package-download");
     }
     wnd.webContents.ipc.on("download-package", () => {
-      downloadPackage((progress) => {
+      packManager.downloadPackage((progress) => {
         wnd.webContents.send("download-package-progress", progress);
         if (progress.step === "completed") {
           downloadSuccess = true;

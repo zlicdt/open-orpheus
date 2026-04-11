@@ -11,7 +11,6 @@ import os from "node:os";
 import { mkdir } from "node:fs/promises";
 import started from "electron-squirrel-startup";
 
-import { isWayland } from "@open-orpheus/window";
 import { onExit } from "@open-orpheus/lifecycle";
 
 // Handle errors as early as possible
@@ -30,11 +29,11 @@ import { data as dataDir, userdata as userdataDir } from "./main/folders";
 import { prepareDeviceId } from "./main/device";
 import { CORE_VERSION } from "./constants";
 import { initializeDatabases } from "./main/database";
-import { loadWebPack, webPack } from "./main/pack";
-import { createApp } from "./main/ui";
+import packManager from "./main/pack";
+import WebPack from "./main/packs/WebPack";
 import registerGuiScheme from "./main/gui";
 import showPackgeDownloadWindow from "./main/windows/package-download";
-import registerAudioStreamer from "./main/audioStreamer";
+import registerAudioStreamerScheme from "./main/audioStreamer";
 import { setMainWindow } from "./main/window";
 
 // This is flags is required because package window is shown before main window, and we don't want to quit the app when package window is closed for any reason.
@@ -164,9 +163,12 @@ app.on("ready", async () => {
     // Make sure data directory exists
     await mkdir(path.join(dataDir), { recursive: true });
 
-    registerOrpheusScheme();
-    registerGuiScheme();
-    registerAudioStreamer();
+    const sess = session.fromPartition("open-orpheus");
+
+    registerOrpheusScheme(protocol);
+    registerOrpheusScheme(sess.protocol);
+    registerGuiScheme(sess.protocol);
+    registerAudioStreamerScheme(protocol);
 
     const defaultUserAgent = session.defaultSession.getUserAgent();
     session.defaultSession.setUserAgent(
@@ -179,16 +181,14 @@ app.on("ready", async () => {
     await loadCookiesFromFile(path.join(dataDir, "cookies.dat"));
 
     try {
-      await loadWebPack();
+      await packManager.loadWebPack();
     } catch (e) {
       console.warn("Failed to load web pack:", e);
       await showPackgeDownloadWindow(); // If user cancelled, this will throw and skip the rest of initialization
-      await loadWebPack(); // Simply try loading again after download, it will throw if the package is still invalid
+      await packManager.loadWebPack(); // Simply try loading again after download, it will throw if the package is still invalid
     }
 
-    await webPack.readPack();
-
-    await createApp(os.platform() === "linux" ? isWayland() : false);
+    await packManager.getPack<WebPack>("web").readPack();
 
     createDesktopLyricsWindow();
     createWindow();

@@ -3,7 +3,6 @@ import path from "node:path";
 import os from "node:os";
 
 import { dragWindow, isWayland } from "@open-orpheus/window";
-import { Menu } from "@open-orpheus/ui";
 
 import { registerCallHandler } from "../calls";
 import { loadFromOrpheusUrl } from "../orpheus";
@@ -14,8 +13,7 @@ import {
   setMaximumSize,
   setMinimumSize,
 } from "../window";
-import { AppMenuItem } from "../menu";
-import { getApp } from "../ui";
+import AppMenu, { AppMenuItem } from "../menu";
 import showManageWindow from "../windows/manage";
 
 function shouldApplyScaleFactor() {
@@ -269,10 +267,7 @@ registerCallHandler<MenuRequest, void>(
       return;
     }
     const menuItems = JSON.parse(data.content) as AppMenuItem[];
-    for (const item of menuItems) {
-      // TODO: why `mine.svg` for `openVinylPage` update?
-      menu.updateItem(item);
-    }
+    menu.update(menuItems);
   }
 );
 
@@ -316,9 +311,9 @@ registerCallHandler<MenuRequest, void>(
       }
       event.sender.send("channel.call", "winhelper.onmenuclick", itemId, id);
     };
-    const menu = new Menu(getApp(), parsedMenuData);
+    const menu = new AppMenu(parsedMenuData.content);
     menus.set(id, menu);
-    menu.onClick(onClick);
+    menu.setClickHandler(onClick);
     menu.show();
   }
 );
