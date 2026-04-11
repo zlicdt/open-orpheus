@@ -3,10 +3,11 @@ import type { BtnImages, BtnState, LayoutNode, ElementTemplate } from "./types";
 // Template cache: style path → parsed template
 const templateCache = new Map<string, ElementTemplate>();
 
-/** Convert #AARRGGBB to CSS #RRGGBBAA. */
-function aarrggbbToCss(c: string): string {
+/** Convert #AABBGGRR (ABGR) to CSS #RRGGBBAA. */
+function abgrToCss(c: string): string {
   if (c.length === 9 && c[0] === "#") {
-    return `#${c.slice(3)}${c.slice(1, 3)}`;
+    // input: #AA BB GG RR  (indices 1-2, 3-4, 5-6, 7-8)
+    return `#${c.slice(7)}${c.slice(5, 7)}${c.slice(3, 5)}${c.slice(1, 3)}`;
   }
   return c;
 }
@@ -29,7 +30,7 @@ export function parseBtnUrl(url: string): BtnImages | null {
     const uri = fileMatch[1];
     const colorMatch = attrs.match(/svg_color='([^']*)'/);
     const color = colorMatch?.[1];
-    states[key] = { uri, color: color ? aarrggbbToCss(color) : undefined };
+    states[key] = { uri, color: color ? abgrToCss(color) : undefined };
   }
 
   if (!states.normal) return null;
