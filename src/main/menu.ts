@@ -3,7 +3,8 @@ import { join, normalize } from "node:path";
 
 import { isWayland } from "@open-orpheus/window";
 
-import { getOrWaitSkinPack } from "./pack";
+import packManager from "./pack";
+import SkinPack from "./packs/SkinPack";
 
 export type AppMenuItemBtn = {
   id: string;
@@ -149,7 +150,7 @@ export default class AppMenu extends EventTarget {
 
     if (styles.size === 0) return;
 
-    const skinPack = await getOrWaitSkinPack();
+    const skinPack = await packManager.getOrWaitPack<SkinPack>("skin");
     const entries = await Promise.all(
       [...styles].map(async (style) => {
         try {

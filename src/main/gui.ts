@@ -4,7 +4,8 @@ import { readFile } from "node:fs/promises";
 import { Protocol } from "electron";
 import mime from "mime";
 
-import { getOrWaitSkinPack } from "./pack";
+import packManager from "./pack";
+import SkinPack from "./packs/SkinPack";
 
 const guiDir = join(__dirname, "gui");
 
@@ -13,7 +14,7 @@ export default function registerGuiScheme(protocol: Protocol) {
     const url = new URL(request.url);
     switch (url.hostname) {
       case "skin": {
-        const skinPack = await getOrWaitSkinPack();
+        const skinPack = await packManager.getOrWaitPack<SkinPack>("skin");
         try {
           const file = await skinPack.readFile(normalize(url.pathname));
           return new Response(Buffer.from(file), {

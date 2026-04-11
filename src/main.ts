@@ -29,7 +29,8 @@ import { data as dataDir, userdata as userdataDir } from "./main/folders";
 import { prepareDeviceId } from "./main/device";
 import { CORE_VERSION } from "./constants";
 import { initializeDatabases } from "./main/database";
-import { loadWebPack, webPack } from "./main/pack";
+import packManager from "./main/pack";
+import WebPack from "./main/packs/WebPack";
 import registerGuiScheme from "./main/gui";
 import showPackgeDownloadWindow from "./main/windows/package-download";
 import registerAudioStreamerScheme from "./main/audioStreamer";
@@ -180,14 +181,14 @@ app.on("ready", async () => {
     await loadCookiesFromFile(path.join(dataDir, "cookies.dat"));
 
     try {
-      await loadWebPack();
+      await packManager.loadWebPack();
     } catch (e) {
       console.warn("Failed to load web pack:", e);
       await showPackgeDownloadWindow(); // If user cancelled, this will throw and skip the rest of initialization
-      await loadWebPack(); // Simply try loading again after download, it will throw if the package is still invalid
+      await packManager.loadWebPack(); // Simply try loading again after download, it will throw if the package is still invalid
     }
 
-    await webPack.readPack();
+    await packManager.getPack<WebPack>("web").readPack();
 
     createDesktopLyricsWindow();
     createWindow();

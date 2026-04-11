@@ -11,7 +11,7 @@ import { registerCallHandler } from "../calls";
 import { loadFromOrpheusUrl } from "../orpheus";
 import { pngFromIco } from "../util";
 import os from "node:os";
-import { loadSkinPack } from "../pack";
+import packManager from "../pack";
 import { stat } from "node:fs/promises";
 
 registerCallHandler<string[], void>("app.log", (_ev, ...args) => {
@@ -127,7 +127,7 @@ registerCallHandler<[string, string], [boolean]>(
   "app.loadSkinPackets",
   async (event, name) => {
     try {
-      await loadSkinPack(name);
+      await packManager.loadSkinPack(name);
       return [true];
     } catch (e) {
       console.error("Failed to load skin pack", e);

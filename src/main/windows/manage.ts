@@ -2,7 +2,8 @@ import path, { resolve } from "node:path";
 import { readdir, stat, rm } from "node:fs/promises";
 
 import { BrowserWindow } from "electron";
-import { webPack } from "../pack";
+import packManager from "../pack";
+import WebPack from "../packs/WebPack";
 import { playCacheManager } from "../cache/PlayCacheManager";
 import { urlCache } from "../orpheus";
 import { lyricCache } from "../folders";
@@ -36,7 +37,7 @@ export default function showManageWindow() {
     manageWnd.loadURL("gui://frontend/");
   }
   manageWnd.webContents.ipc.handle("manage.getWebPackCommitHash", async () => {
-    return webPack.getCommitHash();
+    return packManager.getPack<WebPack>("web").getCommitHash();
   });
 
   manageWnd.webContents.ipc.handle("manage.getCacheStats", async () => {

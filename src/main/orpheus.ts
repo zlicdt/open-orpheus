@@ -1,7 +1,8 @@
 import { Protocol } from "electron";
 import mime from "mime";
 import { extname } from "node:path";
-import { webPack } from "./pack";
+import packManager from "./pack";
+import WebPack from "./packs/WebPack";
 import { sanitizeRelativePath } from "./util";
 import { storage as storageDir, httpCache } from "./folders";
 import { readFile } from "node:fs/promises";
@@ -29,7 +30,9 @@ async function loadFromFilePath(
   path: string
 ): Promise<{ content: Buffer<ArrayBuffer>; contentType: string }> {
   try {
-    const fileContent = await webPack.readFile(path);
+    const fileContent = await packManager
+      .getPack<WebPack>("web")
+      .readFile(path);
     const contentType =
       mime.getType(extname(path)) || "application/octet-stream";
     return { content: Buffer.from(fileContent), contentType };
