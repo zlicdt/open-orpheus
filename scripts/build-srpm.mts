@@ -23,9 +23,9 @@ const projectRoot = resolve(__dirname, "..");
 const pkg = JSON.parse(
   await readFile(resolve(projectRoot, "package.json"), "utf-8")
 );
-const rpmOptions = JSON.parse(
-  await readFile(resolve(projectRoot, "packaging/options.json"), "utf-8")
-).rpm;
+const { rpm: rpmOptions } = await import(
+  new URL("../packaging/options.ts", import.meta.url).href
+);
 
 const electronVersion: string = pkg.devDependencies.electron;
 const outDir = resolve(projectRoot, "out/make/srpm");
