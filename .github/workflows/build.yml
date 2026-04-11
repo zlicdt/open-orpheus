@@ -32,8 +32,27 @@ jobs:
       - name: Build native modules
         run: pnpm build:modules
 
+      - name: Install Flatpak dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y flatpak flatpak-builder elfutils
+
+      - name: Set up Flatpak runtimes
+        if: runner.os == 'Linux'
+        run: |
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
+
       - name: Build application bundles
         run: pnpm make
+
+      - name: Upload flatpak
+        uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-${{ inputs.runner }}
+          path: out/make/flatpak/**
+          if-no-files-found: ignore
 
       - name: Upload deb
         uses: actions/upload-artifact@v7
