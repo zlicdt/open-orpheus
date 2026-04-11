@@ -185,18 +185,16 @@
         ro.observe(menuEl);
       };
 
-      api.onShow((rawItems, templates, cx, cy, colors) => {
-        applyColors(colors);
-        rawTemplates = templates;
-        loadTemplates(templates);
-        items = rawItems as MenuItem[];
+      api.pull().then((data) => {
+        applyColors(data.colors);
+        rawTemplates = data.templates;
+        loadTemplates(data.templates);
+        items = data.items as MenuItem[];
         hoveredIndex = -1;
         submenuItems = null;
         submenuParentIndex = -1;
         submenuHoveredIndex = -1;
         visible = true;
-        cursorX = cx;
-        cursorY = cy;
         menuReady = true;
         tick().then(startObserver);
         commitMenuPosition(api);

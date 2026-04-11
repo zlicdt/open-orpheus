@@ -4,9 +4,10 @@ import { join } from "node:path";
 let menuWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 
-export function getOrCreateMenuWindow(): BrowserWindow {
+export function createMenuWindow(): BrowserWindow {
   if (menuWindow && !menuWindow.isDestroyed()) {
-    return menuWindow;
+    menuWindow.destroy();
+    menuWindow = null;
   }
 
   menuWindow = new BrowserWindow({
@@ -76,9 +77,10 @@ export function createOverlayWindow(): BrowserWindow {
   return overlayWindow;
 }
 
-export function hideMenuWindow() {
+export function destroyMenuWindow() {
   if (menuWindow && !menuWindow.isDestroyed()) {
-    menuWindow.hide();
+    menuWindow.destroy();
+    menuWindow = null;
   }
 }
 

@@ -7,12 +7,12 @@ import { menuSkin, registerMenuSkinUpdater } from "./menu/skin";
 import type { AppMenuItem, MenuClickHandler } from "./menu/types";
 import { patchById } from "./menu/types";
 import {
+  createMenuWindow,
   createOverlayWindow,
+  destroyMenuWindow,
   destroyOverlayWindow,
   getMenuWindow,
-  getOrCreateMenuWindow,
   getOverlayWindow,
-  hideMenuWindow,
 } from "./menu/windows";
 import packManager from "./pack";
 import SkinPack from "./packs/SkinPack";
@@ -89,7 +89,7 @@ export default class AppMenu extends EventTarget {
     if (process.platform === "linux" && isWayland()) {
       destroyOverlayWindow();
     } else {
-      hideMenuWindow();
+      destroyMenuWindow();
     }
     this.dispatchEvent(new Event("close"));
   }
@@ -168,7 +168,7 @@ export default class AppMenu extends EventTarget {
 
   // --- Non-Wayland: transparent popup BrowserWindow ---
   private showWindow() {
-    const wnd = getOrCreateMenuWindow();
+    const wnd = createMenuWindow();
     const cursor = screen.getCursorScreenPoint();
     const display = screen.getDisplayNearestPoint(cursor);
 
@@ -215,11 +215,7 @@ export default class AppMenu extends EventTarget {
     };
 
     const onMenuClose = () => {
-      if (!this.closed) {
-        this.closed = true;
-        this.dispatchEvent(new Event("close"));
-      }
-      cleanup();
+      this.close();
     };
 
     const closeSubmenuWindow = () => {
@@ -298,7 +294,6 @@ export default class AppMenu extends EventTarget {
         (_event, menuId: string | null) => {
           this.onClick?.(menuId);
           this.close();
-          onMenuClose();
         }
       );
 
@@ -312,7 +307,6 @@ export default class AppMenu extends EventTarget {
           if (!wnd.isDestroyed() && wnd.isFocused()) return;
           if (!this.closed) {
             this.close();
-            onMenuClose();
           }
         }, 100);
       });
@@ -321,24 +315,6 @@ export default class AppMenu extends EventTarget {
         return { items, templates, colors: menuSkin };
       });
     };
-
-    const cleanup = () => {
-      wnd.webContents.ipc.removeListener("menu.reportSize", onSizeReport);
-      wnd.webContents.ipc.removeListener("menu.itemClick", onItemClick);
-      wnd.webContents.ipc.removeListener("menu.btnClick", onBtnClick);
-      wnd.webContents.ipc.removeListener("menu.close", onMenuClose);
-      wnd.webContents.ipc.removeAllListeners("menu.openSubmenu");
-      wnd.webContents.ipc.removeAllListeners("menu.closeSubmenu");
-    };
-
-    // Clean up any previous listeners
-    wnd.webContents.ipc.removeAllListeners("menu.reportSize");
-    wnd.webContents.ipc.removeAllListeners("menu.itemClick");
-    wnd.webContents.ipc.removeAllListeners("menu.btnClick");
-    wnd.webContents.ipc.removeAllListeners("menu.close");
-    wnd.webContents.ipc.removeAllListeners("menu.openSubmenu");
-    wnd.webContents.ipc.removeAllListeners("menu.closeSubmenu");
-    wnd.removeAllListeners("blur");
 
     wnd.webContents.ipc.on("menu.reportSize", onSizeReport);
     wnd.webContents.ipc.on("menu.itemClick", onItemClick);
@@ -375,22 +351,9 @@ export default class AppMenu extends EventTarget {
       setTimeout(blurCheck, 100);
     });
 
-    // Send data to renderer (it may still be loading, so we also handle a ready request)
-    const sendData = () => {
-      wnd.webContents.send(
-        "menu.show",
-        this.items,
-        this.templates,
-        0,
-        0,
-        menuSkin
-      );
-    };
-
-    if (wnd.webContents.isLoading()) {
-      wnd.webContents.once("did-finish-load", sendData);
-    } else {
-      sendData();
-    }
+    // Pull-based bootstrap so renderer can always request data after mount.
+    wnd.webContents.ipc.handle("menu.pull", () => {
+      return { items: this.items, templates: this.templates, colors: menuSkin };
+    });
   }
 }
