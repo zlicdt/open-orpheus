@@ -1,14 +1,17 @@
-import { extname } from "node:path";
-import { readFile } from "node:fs/promises";
+import { extname, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { Protocol } from "electron";
 import mime from "mime";
+import unzipper from "unzipper";
 
 import packManager from "./pack";
 import WebPack from "./packs/WebPack";
 import { sanitizeRelativePath } from "./util";
-import { storage as storageDir, httpCache } from "./folders";
+import { storage as storageDir, httpCache, wasm } from "./folders";
 import { URLCacheManager } from "./cache/URLCacheManager";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 
 export const urlCache = new URLCacheManager(httpCache);
 
@@ -43,6 +46,10 @@ async function loadFromFilePath(
   }
 }
 
+function getMd5(content: Buffer<ArrayBuffer>): string {
+  return createHash("md5").update(content).digest("hex");
+}
+
 export async function loadFromOrpheusUrl(url: string): Promise<{
   content: Buffer<ArrayBuffer>;
   contentType: string;
@@ -70,6 +77,90 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
             mime.getType(extname(filePath)) || "application/octet-stream",
           cacheable: false,
         };
+      }
+      if (parsedUrl.pathname.startsWith("/wasm/")) {
+        const type = parsedUrl.pathname.slice("/wasm/".length);
+        const url = parsedUrl.searchParams.get("url");
+        const md5 = parsedUrl.searchParams.get("MD5");
+        const fetchFromServer =
+          parsedUrl.searchParams.get("fetchFromServer") === "true";
+        if (!url || !md5) {
+          throw new LoadError(
+            "Bad Request: Missing url or MD5 parameter for wasm",
+            400
+          );
+        }
+        let fileExt: string;
+        try {
+          fileExt = extname(new URL(url).pathname);
+        } catch {
+          fileExt = extname(url);
+        }
+        const cachedPath = resolve(wasm, md5 + fileExt);
+        const cacheExists = existsSync(cachedPath);
+        let shouldWriteCache = fetchFromServer || !cacheExists;
+        let buf: Buffer<ArrayBuffer>;
+        const doFetch = async () => {
+          const res = await fetch(url);
+          if (!res.ok) {
+            throw new LoadError(
+              `Failed to fetch wasm from url: ${res.statusText}`,
+              res.status
+            );
+          }
+          buf = Buffer.from(await res.arrayBuffer());
+        };
+        if (!fetchFromServer && cacheExists) {
+          buf = (await readFile(cachedPath)) as Buffer<ArrayBuffer>;
+          const actualMd5 = getMd5(buf);
+          if (md5 !== actualMd5) {
+            await doFetch();
+            shouldWriteCache = true;
+          }
+        } else {
+          await doFetch();
+        }
+        const actualMd5 = getMd5(buf);
+        if (md5 !== actualMd5) {
+          throw new LoadError(
+            `Wasm MD5 mismatch: expected ${md5} but got ${actualMd5}`,
+            400
+          );
+        }
+        if (shouldWriteCache) {
+          await mkdir(wasm, { recursive: true });
+          await writeFile(cachedPath, buf);
+        }
+        if (type === "SDK") {
+          const name = parsedUrl.searchParams.get("name");
+          if (!name) {
+            throw new LoadError(
+              "Bad Request: Missing name parameter for wasm SDK",
+              400
+            );
+          }
+          const zipper = await unzipper.Open.buffer(buf);
+          const file = zipper.files.find(
+            (f) => f.path.toLowerCase() === name.toLowerCase()
+          );
+          if (!file) {
+            throw new LoadError(
+              `Wasm SDK zip did not contain the requested file: ${name}`,
+              404
+            );
+          }
+          return {
+            content: Buffer.from(await file.buffer()),
+            contentType:
+              mime.getType(extname(name)) || "application/octet-stream",
+          };
+        } else if (type === "resource") {
+          return {
+            content: buf,
+            contentType: mime.getType(fileExt) || "application/octet-stream",
+          };
+        }
+        throw new LoadError(`Bad Request: Unsupported wasm type: ${type}`, 400);
       }
       return await loadFromFilePath(parsedUrl.pathname);
     case "cache": {
