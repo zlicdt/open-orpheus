@@ -80,11 +80,22 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
       }
       if (parsedUrl.pathname.startsWith("/wasm/")) {
         const type = parsedUrl.pathname.slice("/wasm/".length);
-        const url = parsedUrl.searchParams.get("url");
-        const md5 = parsedUrl.searchParams.get("MD5");
-        const fetchFromServer =
-          parsedUrl.searchParams.get("fetchFromServer") === "true";
-        if (!url || !md5) {
+        const rawSearchIndex = url.indexOf("?");
+        const rawSearch =
+          rawSearchIndex >= 0 ? url.slice(rawSearchIndex + 1) : "";
+        const wasmParams = rawSearch.includes("&&")
+          ? new URLSearchParams(
+              rawSearch
+                .replace(/&&/g, "__ORPHEUS_PARAM_SEP__")
+                .replace(/&/g, "%26")
+                .replace(/__ORPHEUS_PARAM_SEP__/g, "&")
+            )
+          : parsedUrl.searchParams;
+        const wasmUrl = wasmParams.get("url");
+        const md5 = wasmParams.get("MD5");
+        const fetchFromServer = wasmParams.get("fetchFromServer") === "true";
+
+        if (!wasmUrl || !md5) {
           throw new LoadError(
             "Bad Request: Missing url or MD5 parameter for wasm",
             400
@@ -92,16 +103,16 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
         }
         let fileExt: string;
         try {
-          fileExt = extname(new URL(url).pathname);
+          fileExt = extname(new URL(wasmUrl).pathname);
         } catch {
-          fileExt = extname(url);
+          fileExt = extname(wasmUrl);
         }
         const cachedPath = resolve(wasm, md5 + fileExt);
         const cacheExists = existsSync(cachedPath);
         let shouldWriteCache = fetchFromServer || !cacheExists;
         let buf: Buffer<ArrayBuffer>;
         const doFetch = async () => {
-          const res = await fetch(url);
+          const res = await fetch(wasmUrl);
           if (!res.ok) {
             throw new LoadError(
               `Failed to fetch wasm from url: ${res.statusText}`,
@@ -132,7 +143,7 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
           await writeFile(cachedPath, buf);
         }
         if (type === "SDK") {
-          const name = parsedUrl.searchParams.get("name");
+          const name = wasmParams.get("name");
           if (!name) {
             throw new LoadError(
               "Bad Request: Missing name parameter for wasm SDK",
