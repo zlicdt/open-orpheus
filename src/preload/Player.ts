@@ -106,12 +106,61 @@ export type AudioPlayInfo = {
   type: number;
 };
 
+const DEFAULT_LYRIC_STYLE: LyricStyle = {
+  lrcColorNotPlayedTop: "",
+  lrcColorNotPlayedBottom: "",
+  lrcColorPlayedTop: "",
+  lrcColorPlayedBottom: "",
+  outlineColorNotPlayed: "",
+  outlineColorPlayed: "",
+  outlineShadow: [false, false, false, false],
+  lrcFontSize: "",
+  lrcFontBold: false,
+  lrcFontName: "",
+  fontName: "",
+  fontSize: 36,
+  textAlign: ["center", "center"],
+  lineMode: false,
+  showTranslate: "translate",
+  showHorizontal: false,
+  offset: 0,
+  slogan: "",
+  desktopTopMost: false,
+  locked: false,
+};
+
 export default class Player extends EventTarget {
-  private _audio: HTMLAudioElement = new Audio();
+  private _audioCtx: AudioContext = new AudioContext();
+  private _audio = new Audio();
+
+  private _audioSourceNode = this._audioCtx.createMediaElementSource(
+    this._audio
+  );
+  private _pcmTapNode: AudioWorkletNode | null = null;
+  private _pcmTapReady = false;
+  private _audioDataEnabled = false;
+
   private _playInfo: AudioPlayInfo | null = null;
   private _lyricContent: LyricContent | null = null;
 
   songInfo: SongInfo | null = null;
+  lyricStyle: LyricStyle = this._createStyleProxy(DEFAULT_LYRIC_STYLE);
+  playlist: Playlist = { items: [], currentPlay: "" };
+
+  // #region Getters & Setters
+  get enableAudioData() {
+    return this._audioDataEnabled;
+  }
+
+  set enableAudioData(value: boolean) {
+    if (this._audioDataEnabled === value) return;
+    this._audioDataEnabled = value;
+    if (value) {
+      this._connectPcmTap();
+    } else {
+      this._disconnectPcmTap();
+    }
+  }
 
   get lyricContent(): LyricContent | null {
     return this._lyricContent;
@@ -123,29 +172,75 @@ export default class Player extends EventTarget {
       new CustomEvent("lyriccontentupdate", { detail: value })
     );
   }
-  lyricStyle: LyricStyle = this._createStyleProxy({
-    lrcColorNotPlayedTop: "",
-    lrcColorNotPlayedBottom: "",
-    lrcColorPlayedTop: "",
-    lrcColorPlayedBottom: "",
-    outlineColorNotPlayed: "",
-    outlineColorPlayed: "",
-    outlineShadow: [false, false, false, false],
-    lrcFontSize: "",
-    lrcFontBold: false,
-    lrcFontName: "",
-    fontName: "",
-    fontSize: 36,
-    textAlign: ["center", "center"],
-    lineMode: false,
-    showTranslate: "translate",
-    showHorizontal: false,
-    offset: 0,
-    slogan: "",
-    desktopTopMost: false,
-    locked: false,
-  });
-  playlist: Playlist = { items: [], currentPlay: "" };
+
+  get audioContext() {
+    return this._audioCtx;
+  }
+
+  get audio() {
+    return this._audio;
+  }
+
+  get currentId() {
+    return this._playInfo?.playId ?? "";
+  }
+
+  get currentPlayInfo() {
+    return this._playInfo;
+  }
+  // #endregion
+
+  constructor() {
+    super();
+
+    this._audioSourceNode.connect(this._audioCtx.destination);
+
+    this._audio.addEventListener("canplay", () => {
+      this.dispatchEvent(
+        new CustomEvent("load", { detail: { id: this.currentId } })
+      );
+    });
+  }
+
+  private async _ensurePcmTapReady() {
+    if (this._pcmTapReady) return;
+    this._pcmTapReady = true;
+
+    await this._audioCtx.audioWorklet.addModule(
+      "audio://worklet/audio-data.js"
+    );
+
+    this._pcmTapNode = new AudioWorkletNode(this._audioCtx, "pcm-tap", {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      channelCount: 2,
+      channelCountMode: "explicit",
+    });
+
+    this._pcmTapNode.port.onmessage = (ev) => {
+      this.dispatchEvent(new CustomEvent("audiodata", { detail: ev.data }));
+    };
+  }
+
+  private async _connectPcmTap() {
+    await this._ensurePcmTapReady();
+    if (!this._pcmTapNode) return;
+
+    // Rewire: source → tap → destination
+    this._audioSourceNode.disconnect();
+    this._audioSourceNode.connect(this._pcmTapNode);
+    this._pcmTapNode.connect(this._audioCtx.destination);
+  }
+
+  private _disconnectPcmTap() {
+    if (!this._pcmTapNode) return;
+
+    // Rewire: source → destination (bypass tap)
+    this._pcmTapNode.disconnect();
+    this._audioSourceNode.disconnect();
+    this._audioSourceNode.connect(this._audioCtx.destination);
+    this._pcmTapNode.port.postMessage("reset");
+  }
 
   private _createStyleProxy(style: LyricStyle): LyricStyle {
     return new Proxy(style, {
@@ -164,31 +259,6 @@ export default class Player extends EventTarget {
     });
   }
 
-  get audio() {
-    return this._audio;
-  }
-
-  get currentId() {
-    return this._playInfo?.playId ?? "";
-  }
-
-  get currentPlayInfo() {
-    return this._playInfo;
-  }
-
-  constructor() {
-    super();
-    this._audio.addEventListener("canplay", () => {
-      this.dispatchEvent(
-        new CustomEvent("load", { detail: { id: this.currentId } })
-      );
-    });
-  }
-
-  getAudioElement(): HTMLAudioElement | undefined {
-    return this._audio;
-  }
-
   async load(playInfo: AudioPlayInfo): Promise<HTMLAudioElement> {
     this._playInfo = playInfo;
     this.dispatchEvent(new CustomEvent("playinfoupdate"));
@@ -202,5 +272,6 @@ export default class Player extends EventTarget {
     this._audio.currentTime = 0;
     this._audio.src = "";
     this._playInfo = null;
+    this._pcmTapNode?.port.postMessage("reset");
   }
 }

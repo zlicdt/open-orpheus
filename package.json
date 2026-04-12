@@ -37,6 +37,7 @@
     "@eslint/js": "^9.39.4",
     "@open-orpheus/lifecycle": "workspace:*",
     "@reforged/maker-appimage": "^5.2.0",
+    "@types/audioworklet": "^0.0.97",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/unzipper": "^0.10.11",
     "@typescript-eslint/eslint-plugin": "^8.57.1",

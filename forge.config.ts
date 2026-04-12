@@ -92,6 +92,11 @@ const config: ForgeConfig = {
           config: "vite.preload.config.ts",
           target: "preload",
         },
+        {
+          entry: "src/worklets/audio-data.ts",
+          config: "vite.worklets.config.ts",
+          target: "preload",
+        },
       ],
       renderer: [
         {

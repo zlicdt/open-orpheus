@@ -70,6 +70,7 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       stream: true,
+      bypassCSP: true,
     },
   },
 ]);
@@ -173,7 +174,7 @@ app.on("ready", async () => {
     ] = await Promise.all([
       import("./main/orpheus").then((m) => m.default),
       import("./main/gui").then((m) => m.default),
-      import("./main/audioStreamer").then((m) => m.default),
+      import("./main/audio").then((m) => m.default),
     ]);
 
     const sess = session.fromPartition("open-orpheus");

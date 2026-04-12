@@ -114,6 +114,10 @@ registerCallHandler<[{ playId: string }], [typeof failedPlaybackInfo]>(
   () => [failedPlaybackInfo]
 );
 
+registerCallHandler<[number], void>("audioplayer.enableAudioData", (enable) => {
+  player.enableAudioData = enable === 1;
+});
+
 registerCallHandler<
   [{ device: string; use_play_device: boolean }],
   [{ result: boolean }]
@@ -150,7 +154,9 @@ registerCallHandler<[string, { device: AudioDeviceInit; type: string }], void>(
   async (kind, { device }) => {
     if (kind === "device") {
       // TODO: Do we store this on native side?
-      await player.audio.setSinkId(device.deviceId);
+      await (player.audioContext as unknown as HTMLAudioElement).setSinkId(
+        device.deviceId
+      );
     }
   }
 );

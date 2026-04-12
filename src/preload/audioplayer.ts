@@ -125,6 +125,11 @@ player.audio.addEventListener("volumechange", () => {
   );
 });
 
+player.addEventListener("audiodata", (event) => {
+  const { data, pts } = (event as CustomEvent).detail;
+  fireNativeCall("audioplayer.onAudioData", { data, pts });
+});
+
 navigator.mediaSession.setActionHandler("nexttrack", () => {
   fireNativeCall("winhelper.onHotkey", "next_1", true);
 });
