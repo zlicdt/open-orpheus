@@ -4,6 +4,8 @@ use neon::{
     result::NeonResult,
     types::{JsBuffer, buffer::TypedArray},
 };
+#[cfg(target_arch = "x86_64")]
+use std::sync::OnceLock;
 use x11rb::{
     connection::Connection,
     protocol::xproto::{
@@ -13,6 +15,22 @@ use x11rb::{
 
 #[cfg(target_arch = "x86_64")]
 mod wayland;
+
+#[cfg(target_arch = "x86_64")]
+static DISABLE_WAYLAND_HOOKS: OnceLock<bool> = OnceLock::new();
+
+#[cfg(target_arch = "x86_64")]
+fn disable_wayland_hooks() -> bool {
+    *DISABLE_WAYLAND_HOOKS.get_or_init(|| {
+        std::env::var("DISABLE_WAYLAND_HOOKS")
+            .ok()
+            .map(|v| {
+                let value = v.trim().to_ascii_lowercase();
+                !value.is_empty() && value != "0" && value != "false" && value != "no"
+            })
+            .unwrap_or(false)
+    })
+}
 
 #[neon::export]
 fn is_wayland() -> bool {
@@ -113,7 +131,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     neon::registered().export(&mut cx)?;
 
     #[cfg(target_arch = "x86_64")]
-    wayland::init_wayland_hook();
+    if !disable_wayland_hooks() {
+        wayland::init_wayland_hook();
+    }
 
     Ok(())
 }
@@ -121,7 +141,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 #[unsafe(no_mangle)]
 pub extern "C" fn on_unload() {
     #[cfg(target_arch = "x86_64")]
-    wayland::remove_wayland_hook();
+    if !disable_wayland_hooks() {
+        wayland::remove_wayland_hook();
+    }
 }
 
 #[used]
