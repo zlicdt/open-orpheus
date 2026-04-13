@@ -158,6 +158,13 @@ app.on("ready", async () => {
     // Make sure data directory exists
     await mkdir(path.join(dataDir), { recursive: true });
 
+    const openOrpheusSession = session.fromPartition("open-orpheus");
+
+    await import("./main/gui").then((m) => {
+      // Register GUI scheme for Open Orpheus session now, package download window might need it
+      m.default(openOrpheusSession.protocol);
+    });
+
     try {
       await packManager.loadWebPack();
     } catch (e) {
@@ -167,22 +174,17 @@ app.on("ready", async () => {
     }
 
     // Initialize schemes and get registrars
-    const [
-      registerOrpheusScheme,
-      registerGuiScheme,
-      registerAudioStreamerScheme,
-    ] = await Promise.all([
+    const [registerOrpheusScheme, registerAudioScheme] = await Promise.all([
       import("./main/orpheus").then((m) => m.default),
-      import("./main/gui").then((m) => m.default),
       import("./main/audio").then((m) => m.default),
     ]);
 
-    const sess = session.fromPartition("open-orpheus");
-
+    // Register for default session
     registerOrpheusScheme(protocol);
-    registerOrpheusScheme(sess.protocol);
-    registerGuiScheme(sess.protocol);
-    registerAudioStreamerScheme(protocol);
+    registerAudioScheme(protocol);
+
+    // Register for Open Orpheus session
+    registerOrpheusScheme(openOrpheusSession.protocol);
 
     const defaultUserAgent = session.defaultSession.getUserAgent();
     session.defaultSession.setUserAgent(

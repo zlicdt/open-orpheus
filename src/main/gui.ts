@@ -5,7 +5,7 @@ import { Protocol } from "electron";
 import mime from "mime";
 
 import packManager from "./pack";
-import SkinPack from "./packs/SkinPack";
+import type SkinPack from "./packs/SkinPack";
 
 const guiDir = join(__dirname, "gui");
 
