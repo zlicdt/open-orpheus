@@ -1,4 +1,4 @@
-import sharp, { SharpInput } from "sharp";
+import photon from "@silvia-odwyer/photon-node";
 
 import packManager from "../pack";
 import SkinPack from "../packs/SkinPack";
@@ -12,17 +12,17 @@ export const menuSkin: MenuSkin = {
   itemHover: "#e1ebfc",
 };
 
-async function extractColor(img: SharpInput): Promise<string> {
-  const image = sharp(img);
-  const { width = 1, height = 1 } = await image.metadata();
-  const cx = Math.floor(width / 2);
-  const cy = Math.floor(height / 2);
-  const { data } = await image
-    .extract({ left: cx, top: cy, width: 1, height: 1 })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const [r, g, b, a] = data;
+async function extractColor(image: photon.PhotonImage): Promise<string> {
+  const width = image.get_width();
+  const height = image.get_height();
+  const cx = Math.max(0, Math.floor(width / 2));
+  const cy = Math.max(0, Math.floor(height / 2));
+  const data = image.get_raw_pixels();
+  const offset = (cy * width + cx) * 4;
+  const r = data[offset] ?? 0;
+  const g = data[offset + 1] ?? 0;
+  const b = data[offset + 2] ?? 0;
+  const a = data[offset + 3] ?? 255;
   return `#${[r, g, b, a].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -55,7 +55,9 @@ export function registerMenuSkinUpdater() {
       ].map((p) => skinPack.readFile(p))
     );
     const [bgColor, hoverColor, separatorColor] = await Promise.all(
-      [bg, hov, sep].map(extractColor)
+      [bg, hov, sep]
+        .map((buf) => photon.PhotonImage.new_from_byteslice(buf))
+        .map(extractColor)
     );
 
     const xml = elBuf.toString("utf-8");

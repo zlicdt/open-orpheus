@@ -2,7 +2,7 @@ import { dirname, join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 
 import { BrowserWindow, ipcMain } from "electron";
-import sharp from "sharp";
+import photon from "@silvia-odwyer/photon-node";
 
 import { mainWindow, setWindowId } from "../window";
 import { parseLrc } from "../lyrics";
@@ -188,12 +188,13 @@ export async function createDesktopLyricsPreview(
         clearTimeout(timeout);
         try {
           const image = await previewWindow.webContents.capturePage();
-          resolve([
-            Buffer.from(
-              await sharp(image.toPNG()).resize(width, height).toBuffer()
-            ),
-            [width, height],
-          ]);
+          const photonImage = photon.PhotonImage.new_from_byteslice(
+            image.toPNG()
+          );
+          const pngBuf = photon
+            .resize(photonImage, width, height, photon.SamplingFilter.Lanczos3)
+            .get_bytes();
+          resolve([Buffer.from(pngBuf), [width, height]]);
         } catch (err) {
           reject(err);
         } finally {

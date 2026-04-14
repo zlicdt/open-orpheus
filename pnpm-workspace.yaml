@@ -6,7 +6,6 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
-  sharp: true
   unrs-resolver: true
 patchedDependencies:
   electron-installer-redhat@3.4.0: patches/electron-installer-redhat@3.4.0.patch

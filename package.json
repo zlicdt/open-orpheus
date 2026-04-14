@@ -64,8 +64,8 @@
     "@open-orpheus/database": "workspace:*",
     "@open-orpheus/ui": "workspace:*",
     "@open-orpheus/window": "workspace:*",
-    "electron-squirrel-startup": "^1.0.1",
-    "sharp": "^0.34.5"
+    "@silvia-odwyer/photon-node": "^0.3.4",
+    "electron-squirrel-startup": "^1.0.1"
   },
   "optionalDependencies": {
     "electron-installer-redhat": "^3.4.0"
