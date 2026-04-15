@@ -115,13 +115,13 @@ ipcRenderer.on("audio.onProgress", (event, progress) => {
   onPlayProgress();
 });
 
-player.audio.addEventListener("volumechange", () => {
+player.addEventListener("volumechange", () => {
   fireNativeCall(
     "audioplayer.onVolume",
     player.currentId,
     "",
     0,
-    player.audio.volume
+    player.volume
   );
 });
 

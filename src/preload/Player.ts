@@ -136,6 +136,9 @@ export default class Player extends EventTarget {
   private _audioSourceNode = this._audioCtx.createMediaElementSource(
     this._audio
   );
+
+  private _gainNode = this._audioCtx.createGain();
+
   private _pcmTapNode: AudioWorkletNode | null = null;
   private _pcmTapReady = false;
   private _audioDataEnabled = false;
@@ -181,6 +184,10 @@ export default class Player extends EventTarget {
     return this._audio;
   }
 
+  get gainNode() {
+    return this._gainNode;
+  }
+
   get currentId() {
     return this._playInfo?.playId ?? "";
   }
@@ -188,12 +195,23 @@ export default class Player extends EventTarget {
   get currentPlayInfo() {
     return this._playInfo;
   }
+
+  get volume() {
+    return this._gainNode.gain.value;
+  }
+  set volume(value: number) {
+    this._gainNode.gain.value = value;
+    this.dispatchEvent(new CustomEvent("volumechange", { detail: value }));
+  }
   // #endregion
 
   constructor() {
     super();
 
-    this._audioSourceNode.connect(this._audioCtx.destination);
+    this._audio.volume = 1;
+
+    this._audioSourceNode.connect(this._gainNode);
+    this._gainNode.connect(this._audioCtx.destination);
 
     this._audio.addEventListener("canplay", () => {
       this.dispatchEvent(
@@ -229,7 +247,7 @@ export default class Player extends EventTarget {
     // Rewire: source → tap → destination
     this._audioSourceNode.disconnect();
     this._audioSourceNode.connect(this._pcmTapNode);
-    this._pcmTapNode.connect(this._audioCtx.destination);
+    this._pcmTapNode.connect(this._gainNode);
   }
 
   private _disconnectPcmTap() {
@@ -238,7 +256,7 @@ export default class Player extends EventTarget {
     // Rewire: source → destination (bypass tap)
     this._pcmTapNode.disconnect();
     this._audioSourceNode.disconnect();
-    this._audioSourceNode.connect(this._audioCtx.destination);
+    this._audioSourceNode.connect(this._gainNode);
     this._pcmTapNode.port.postMessage("reset");
   }
 

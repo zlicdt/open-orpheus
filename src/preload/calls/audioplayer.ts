@@ -44,7 +44,7 @@ registerCallHandler<[string, string, number], void>(
 registerCallHandler<[string, string, number], void>(
   "audioplayer.setVolume",
   (a, b, volume) => {
-    player.audio.volume = volume;
+    player.volume = volume;
   }
 );
 
