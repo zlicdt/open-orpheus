@@ -23,7 +23,6 @@ features = [
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2.182"
-x11rb = "0.13.2"
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
 retour = "0.4.0-alpha.4"
