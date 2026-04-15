@@ -162,7 +162,7 @@ registerCallHandler<[string, boolean, string, number, string[]], void>(
   "storage.downloadscanner",
   (event) => {
     // TODO: Scan download dir for downloaded music
-    event.sender.send("channel.call", "storage.ondownloadscanner");
+    event.sender.send("channel.call", "storage.ondownloadscanner", []);
   }
 );
 
