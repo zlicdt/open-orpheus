@@ -9,33 +9,38 @@
   }
 
   let statsPromise = $state(orpheus.getCacheStats());
-  let clearing = $state<"http" | "lyrics" | null>(null);
+  let clearing = $state<Parameters<typeof orpheus.clearResources>[0] | null>(
+    null
+  );
 
-  async function clearCache(category: "http" | "lyrics") {
+  async function clearResources(
+    category: Parameters<typeof orpheus.clearResources>[0]
+  ) {
     clearing = category;
     try {
-      await orpheus.clearCache(category);
+      await orpheus.clearResources(category);
     } finally {
       clearing = null;
       statsPromise = orpheus.getCacheStats();
     }
   }
 
-  async function clearAll() {
-    await clearCache("http");
-    await clearCache("lyrics");
+  async function clearCache() {
+    await clearResources("http");
+    await clearResources("lyrics");
   }
 </script>
 
-<h1 class="text-2xl font-bold">缓存</h1>
+<h1 class="text-2xl font-bold">本地资源</h1>
 <p class="mt-2 text-gray-700">
   Open Orpheus
-  日常使用时会产生缓存，如歌曲、歌词和封面等。你可以在这里查看和管理这些缓存。
+  日常使用时会产生一些本地资源，如歌曲、歌词和封面等资源的缓存和播放器样式。你可以在这里查看和管理这些本地资源。
 </p>
 
 {#await statsPromise}
-  <p class="mt-4 text-gray-500">正在加载缓存信息…</p>
+  <p class="mt-4 text-gray-500">正在加载本地资源信息…</p>
 {:then stats}
+  <h2 class="mt-2 text-xl font-bold">缓存</h2>
   <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="rounded-lg border p-4">
       <h2 class="font-semibold">播放缓存</h2>
@@ -52,7 +57,7 @@
         variant="outline"
         size="sm"
         disabled={clearing !== null}
-        onclick={() => clearCache("http")}
+        onclick={() => clearResources("http")}
         >{clearing === "http" ? "清除中…" : "清除"}</Button
       >
     </div>
@@ -65,7 +70,7 @@
         variant="outline"
         size="sm"
         disabled={clearing !== null}
-        onclick={() => clearCache("lyrics")}
+        onclick={() => clearResources("lyrics")}
         >{clearing === "lyrics" ? "清除中…" : "清除"}</Button
       >
     </div>
@@ -75,10 +80,26 @@
       class="mt-4 w-full sm:w-auto"
       variant="destructive"
       disabled={clearing !== null}
-      onclick={clearAll}
+      onclick={clearCache}
       >{clearing !== null ? "清除中…" : "清除所有可清除的缓存"}</Button
     >
   </div>
+
+  <h2 class="mt-2 text-xl font-bold">数据</h2>
+  <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="rounded-lg border p-4">
+      <h2 class="font-semibold">播放器样式</h2>
+      <p class="text-sm text-gray-600">{formatBytes(stats.wasm.sizeBytes)}</p>
+      <Button
+        class="mt-3"
+        variant="outline"
+        size="sm"
+        disabled={clearing !== null}
+        onclick={() => clearResources("wasm")}
+        >{clearing === "http" ? "清除中…" : "清除"}</Button
+      >
+    </div>
+  </div>
 {:catch}
-  <p class="mt-4 text-red-500">获取缓存信息失败。</p>
+  <p class="mt-4 text-red-500">获取本地资源信息失败。</p>
 {/await}

@@ -9,7 +9,7 @@
   import Package from "./Package.svelte";
 
   import Database from "@lucide/svelte/icons/database";
-  import Cache from "./Cache.svelte";
+  import LocalResources from "./LocalResources.svelte";
 
   import Bug from "@lucide/svelte/icons/bug";
   import Debug from "./Debug.svelte";
@@ -22,10 +22,10 @@
       component: Package,
     },
     {
-      id: "cache",
-      name: "缓存",
+      id: "local-resources",
+      name: "本地资源",
       icon: Database,
-      component: Cache,
+      component: LocalResources,
     },
     {
       id: "debug",
@@ -75,6 +75,9 @@
       <div class="my-4" class:mt-0={i === 0} id={item.id}>
         <item.component />
       </div>
+      {#if i < items.length - 1}
+        <hr class="my-6 border-t-2 border-gray-200/50" />
+      {/if}
     {/each}
   </main>
 </Sidebar.Provider>

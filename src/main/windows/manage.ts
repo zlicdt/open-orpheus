@@ -6,7 +6,7 @@ import packManager from "../pack";
 import WebPack from "../packs/WebPack";
 import { playCacheManager } from "../cache/PlayCacheManager";
 import { urlCache } from "../orpheus";
-import { lyricCache } from "../folders";
+import { lyricCache, wasm as wasmDir } from "../folders";
 
 let manageWndInstance: BrowserWindow | null = null;
 
@@ -41,7 +41,7 @@ export default function showManageWindow() {
   });
 
   manageWnd.webContents.ipc.handle("manage.getCacheStats", async () => {
-    const [playCacheInfo, httpStats, lyrics] = await Promise.all([
+    const [playCacheInfo, httpStats, lyrics, wasm] = await Promise.all([
       playCacheManager.getInfo(),
       urlCache.getStats(),
       (async () => {
@@ -64,6 +64,26 @@ export default function showManageWindow() {
           return { entryCount: 0, sizeBytes: 0 };
         }
       })(),
+      (async () => {
+        try {
+          const entries = await readdir(wasmDir, { withFileTypes: true });
+          const files = entries.filter((e) => e.isFile());
+          let sizeBytes = 0;
+          await Promise.all(
+            files.map(async (f) => {
+              try {
+                const s = await stat(resolve(wasmDir, f.name));
+                sizeBytes += s.size;
+              } catch {
+                // Skip
+              }
+            })
+          );
+          return { entryCount: files.length, sizeBytes };
+        } catch {
+          return { entryCount: 0, sizeBytes: 0 };
+        }
+      })(),
     ]);
 
     return {
@@ -75,16 +95,19 @@ export default function showManageWindow() {
       },
       http: httpStats,
       lyrics,
+      wasm,
     };
   });
 
   manageWnd.webContents.ipc.handle(
-    "manage.clearCache",
-    async (_, category: "http" | "lyrics") => {
+    "manage.clearResources",
+    async (_, category: "http" | "lyrics" | "wasm") => {
       if (category === "http") {
         await urlCache.clear();
       } else if (category === "lyrics") {
         await rm(lyricCache, { recursive: true, force: true });
+      } else if (category === "wasm") {
+        await rm(wasmDir, { recursive: true, force: true });
       }
     }
   );

@@ -4,8 +4,8 @@ contextBridge.exposeInMainWorld("orpheus", {
   getWebPackCommitHash: () => ipcRenderer.invoke("manage.getWebPackCommitHash"),
 
   getCacheStats: () => ipcRenderer.invoke("manage.getCacheStats"),
-  clearCache: (category: "http" | "lyrics") =>
-    ipcRenderer.invoke("manage.clearCache", category),
+  clearResources: (category: "http" | "lyrics") =>
+    ipcRenderer.invoke("manage.clearResources", category),
 
   openGpuInfo: () => ipcRenderer.invoke("manage.openGpuInfo"),
 });

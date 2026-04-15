@@ -7,13 +7,14 @@ declare type AllCacheStats = {
   play: CacheGroupStats;
   http: CacheGroupStats;
   lyrics: CacheGroupStats;
+  wasm: CacheGroupStats;
 };
 
 declare const orpheus: {
   getWebPackCommitHash: () => Promise<string>;
 
   getCacheStats: () => Promise<AllCacheStats>;
-  clearCache: (category: "http" | "lyrics") => Promise<void>;
+  clearResources: (category: "http" | "lyrics" | "wasm") => Promise<void>;
 
   openGpuInfo: () => Promise<void>;
 };
