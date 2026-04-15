@@ -1,5 +1,10 @@
 # Open Orpheus
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/YUCLing/open-orpheus/release.yml)
+![GitHub License](https://img.shields.io/github/license/YUCLing/open-orpheus)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/YUCLing/open-orpheus/total)
+![GitHub Repo stars](https://img.shields.io/github/stars/YUCLing/open-orpheus)
+
 An open-source implementation of Netease Cloud Music's Orpheus browser host.
 
 Track the project's current dev plans at https://github.com/users/YUCLing/projects/3
