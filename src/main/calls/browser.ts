@@ -25,14 +25,15 @@ type FullCookie = {
 registerCallHandler<[string], [FullCookie[]]>(
   "browser.getFullCookies",
   async (_, url) => {
+    // TODO: We might need to know when the cookie was actually created/last accessed and what's the original URL.
     return [
-      getFullCookies(url).map((cookie) => ({
-        Creation: cookie.createdAt,
+      (await getFullCookies(url)).map((cookie) => ({
+        Creation: Date.now(),
         Domain: cookie.domain,
-        Expires: cookie.expires?.valueOf(),
-        HasExpires: cookie.expires !== undefined ? 1 : 0,
+        Expires: cookie.expirationDate?.valueOf(),
+        HasExpires: cookie.expirationDate !== undefined ? 1 : 0,
         Httponly: cookie.httpOnly ? 1 : 0,
-        LastAccess: cookie.lastAccessed,
+        LastAccess: Date.now(),
         Name: cookie.name,
         Path: cookie.path,
         Secure: cookie.secure ? 1 : 0,
@@ -46,7 +47,7 @@ registerCallHandler<[string], [FullCookie[]]>(
 registerCallHandler<[string], [Record<string, string>]>(
   "browser.getCookies",
   async (_, url) => {
-    return [getCookies(url)];
+    return [await getCookies(url)];
   }
 );
 
@@ -54,7 +55,7 @@ registerCallHandler<[SetCookie], [boolean]>(
   "browser.setCookie",
   async (_, cookie) => {
     try {
-      setCookie({
+      setCookie(cookie.Url, {
         name: cookie.Name,
         value: cookie.Value,
         domain: cookie.Domain,
@@ -71,6 +72,11 @@ registerCallHandler<[SetCookie], [boolean]>(
 registerCallHandler<[string, string], [number]>(
   "browser.removeCookie",
   async (_, url, name) => {
-    return [removeCookie(url, name)];
+    const hasCookie = (await getCookies(url))[name] !== undefined;
+    if (!hasCookie) {
+      return [0];
+    }
+    await removeCookie(url, name);
+    return [1];
   }
 );

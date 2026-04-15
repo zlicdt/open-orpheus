@@ -50,7 +50,7 @@ registerCallHandler<
         headers: {
           ...request.headers,
           "User-Agent": session.defaultSession.getUserAgent(),
-          Cookie: stringifyCookie(getCookies(request.url)),
+          Cookie: stringifyCookie(await getCookies(request.url)),
         },
         body: request.body,
       });

@@ -196,9 +196,6 @@ app.on("ready", async () => {
     await Promise.all([
       import("./main/channel"),
       prepareDeviceId(),
-      import("./main/cookie").then((m) =>
-        m.loadFromFile(path.join(dataDir, "cookies.dat"))
-      ),
       packManager.getPack<WebPack>("web").readPack(),
       import("./main/windows/desktop-lyrics").then((m) => {
         m.default();
