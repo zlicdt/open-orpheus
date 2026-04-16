@@ -44,6 +44,18 @@ fn is_wayland() -> bool {
 }
 
 #[neon::export]
+fn get_last_created_window_id() -> Option<String> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        wayland::get_last_created_window_id()
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        None
+    }
+}
+
+#[neon::export]
 fn drag_window<'cx>(cx: &mut Cx<'cx>, handle: Handle<JsBuffer>) -> NeonResult<()> {
     #[cfg(target_arch = "x86_64")]
     if wayland::is_wayland() {

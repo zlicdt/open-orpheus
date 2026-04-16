@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld("desktopLyrics", {
       callback(playing)
     );
   },
+  onLockedChange(callback: (locked: boolean) => void) {
+    ipcRenderer.on("desktopLyrics.setLocked", (_event, locked) =>
+      callback(locked)
+    );
+  },
   requestFullUpdate() {
     ipcRenderer.invoke("desktopLyrics.requestFullUpdate");
   },
@@ -31,6 +36,9 @@ contextBridge.exposeInMainWorld("desktopLyrics", {
   },
   changeOrientation() {
     ipcRenderer.invoke("desktopLyrics.changeOrientation");
+  },
+  setInputRegion(x: number, y: number, width: number, height: number) {
+    ipcRenderer.invoke("desktopLyrics.setInputRegion", x, y, width, height);
   },
   performAction(action: string) {
     ipcRenderer.invoke("desktopLyrics.performAction", action);

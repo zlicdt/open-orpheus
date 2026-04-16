@@ -3,22 +3,26 @@
   import Lyrics from "$lib/components/Lyrics.svelte";
   import type { LyricsData, LyricStyleConfig } from "$lib/types";
   import IconButton from "$lib/components/IconButton.svelte";
+  import { cn } from "$lib/utils";
 
   let lyricsData: LyricsData | null = $state(null);
   let currentTime = $state(0);
   let playing = $state(false);
+  let locked = $state(false);
+  let unlockButton: HTMLButtonElement | null = $state(null);
 
-  const items: ([string, string] | [string, string, true])[] = $derived([
-    ["home", "detail"],
-    ["poffset", "offset_forward"], // TODO: In what situations offsets will be locked
-    ["moffset", "offset_back"],
-    ["prev", "playprev"],
-    [playing ? "topause" : "toplay", "play_pause"],
-    ["next", "playnext"],
-    ["setting", "setting"],
-    ["lock", "lock"],
-    ["close", "close"],
-  ]);
+  const items: ([string, string, string] | [string, string, string, true])[] =
+    $derived([
+      ["home", "detail", "打开详情页"],
+      ["poffset", "offset_forward", "向前偏移歌词 0.5 秒"], // TODO: In what situations offsets will be locked
+      ["moffset", "offset_back", "向后偏移歌词 0.5 秒"],
+      ["prev", "playprev", "播放上一首"],
+      [playing ? "topause" : "toplay", "play_pause", playing ? "暂停" : "播放"],
+      ["next", "playnext", "播放下一首"],
+      ["setting", "setting", "设置"],
+      ["lock", "lock", "锁定桌面歌词"],
+      ["close", "close", "关闭桌面歌词"],
+    ]);
 
   const defaultStyle: LyricStyleConfig = {
     fontFamily: "sans-serif",
@@ -110,6 +114,10 @@
       }
     });
 
+    api.onLockedChange((isLocked: boolean) => {
+      locked = isLocked;
+    });
+
     // Request full state from Player on load
     api.requestFullUpdate();
 
@@ -117,6 +125,7 @@
   });
 
   function onDrag() {
+    if (locked) return;
     const api = window.desktopLyrics;
     api?.dragWindow();
   }
@@ -124,9 +133,12 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="group flex h-screen w-screen cursor-grab items-center justify-evenly overflow-hidden rounded-lg p-2 hover:bg-black/40 select-none{lyricStyle.vertical
-    ? ''
-    : ' flex-col'}"
+  class={cn(
+    "group flex h-screen w-screen items-center justify-evenly overflow-hidden rounded-lg p-2 select-none",
+    !locked && "hover:bg-black/40"
+  )}
+  class:cursor-grab={!locked}
+  class:flex-col={!lyricStyle.vertical}
   onmousedown={onDrag}
 >
   <div
@@ -134,23 +146,40 @@
       ? ' flex-col'
       : ''}"
   >
-    {#each items as [icon, action, disabled] (action)}
-      <IconButton
-        normal={`gui://skin/lrc/${icon}_normal.svg`}
-        hover={`gui://skin/lrc/${icon}_over.svg`}
-        active={`gui://skin/lrc/${icon}_push.svg`}
-        disabled={disabled ? `gui://skin/lrc/${icon}_dis.svg` : undefined}
-        onmousedown={(e) => {
-          e.stopPropagation();
-        }}
+    {#if locked}
+      <button
+        bind:this={unlockButton}
+        class="size-12 cursor-pointer"
         onclick={() => {
           const api = window.desktopLyrics;
-          api?.performAction(action);
+          api?.performAction("unlock");
         }}
-        class="cursor-pointer"
-        imgClass="size-6"
-      />
-    {/each}
+        title="解锁桌面歌词"
+        ><img
+          src="gui://skin/lrc/desk_icn_unlock.png"
+          alt="解锁桌面歌词"
+        /></button
+      >
+    {:else}
+      {#each items as [icon, action, title, disabled] (action)}
+        <IconButton
+          normal={`gui://skin/lrc/${icon}_normal.svg`}
+          hover={`gui://skin/lrc/${icon}_over.svg`}
+          active={`gui://skin/lrc/${icon}_push.svg`}
+          disabled={disabled ? `gui://skin/lrc/${icon}_dis.svg` : undefined}
+          onmousedown={(e) => {
+            e.stopPropagation();
+          }}
+          onclick={() => {
+            const api = window.desktopLyrics;
+            api?.performAction(action);
+          }}
+          class="cursor-pointer"
+          imgClass="size-6"
+          {title}
+        />
+      {/each}
+    {/if}
   </div>
   <Lyrics
     {lyricsData}

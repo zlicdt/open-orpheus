@@ -165,4 +165,7 @@ ipcRenderer.on("desktopLyrics.sendFullState", () => {
     "desktopLyrics.updateStyle",
     transformLyricStyle(player.lyricStyle)
   );
+
+  // Re-send locked state
+  ipcRenderer.invoke("desktopLyrics.setLocked", player.lyricStyle.locked);
 });

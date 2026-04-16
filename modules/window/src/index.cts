@@ -10,6 +10,7 @@ import * as addon from "./load.cjs";
 declare module "./load.cjs" {
   function dragWindow(hwnd: Buffer): void;
   function isWayland(): boolean;
+  function getLastCreatedWindowId(): string | null;
   function captureNextWindowFirstCursorEnter(
     callback: (x: number, y: number) => void
   ): void;
@@ -24,6 +25,13 @@ export function isWayland(): boolean {
     throw new Error("isWayland is only supported on Linux");
   }
   return addon.isWayland();
+}
+
+export function getLastCreatedWindowId(): string | null {
+  if (os.platform() !== "linux") {
+    throw new Error("getLastCreatedWindowId is only supported on Linux");
+  }
+  return addon.getLastCreatedWindowId();
 }
 
 export function captureNextWindowFirstCursorEnter(

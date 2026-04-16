@@ -43,9 +43,11 @@ export interface DesktopLyricsAPI {
   ): void;
   onStyleUpdate(callback: (data: Partial<LyricStyleConfig>) => void): void;
   onPlayStateChange(callback: (playing: boolean) => void): void;
+  onLockedChange(callback: (locked: boolean) => void): void;
   requestFullUpdate(): void;
   dragWindow(): void;
   changeOrientation(): void;
+  setInputRegion(x: number, y: number, width: number, height: number): void;
   performAction(action: string): void;
 }
 

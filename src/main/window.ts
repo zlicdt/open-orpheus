@@ -1,9 +1,14 @@
+import os from "node:os";
+
 import { app, BrowserWindow, shell } from "electron";
+
+import { getLastCreatedWindowId, isWayland } from "@open-orpheus/window";
 
 import AppMenu from "./menu";
 
 type WindowProperties = {
   id?: string;
+  waylandId?: string;
   maximumSize?: { x: number; y: number };
   minimumSize?: { x: number; y: number };
   menus: Map<number, AppMenu>;
@@ -66,6 +71,21 @@ app.on("browser-window-created", (event, wnd) => {
   wnd.on("leave-full-screen", () => {
     enableSizeConstraints(wnd);
   });
+
+  if (os.platform() === "linux" && isWayland()) {
+    // On Wayland, windows are actually not preserved across show / hide
+    wnd.on("show", () => {
+      const props = windowProperties.get(wnd.id);
+      if (!props) return;
+      props.waylandId = getLastCreatedWindowId();
+    });
+
+    wnd.on("hide", () => {
+      const props = windowProperties.get(wnd.id);
+      if (!props) return;
+      props.waylandId = undefined;
+    });
+  }
 
   wnd.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -134,4 +154,24 @@ export function setWindowProp<T>(wnd: BrowserWindow, prop: string, value: T) {
 export function getWindowProp<T>(wnd: BrowserWindow, prop: string): T {
   const customProps = windowProperties.get(wnd.id).customProps;
   return customProps[prop] as T;
+}
+
+export function setWindowInputRegion(
+  wnd: BrowserWindow,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  x: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  y: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  width: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  height: number
+) {
+  if (os.platform() === "linux" && isWayland()) {
+    const props = windowProperties.get(wnd.id);
+    if (!props || !props.waylandId) return;
+    // TODO: Find a way to set input region
+  } else {
+    // TODO: implement input region for non-wayland / non-linux platforms
+  }
 }

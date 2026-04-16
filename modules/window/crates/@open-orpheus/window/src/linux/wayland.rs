@@ -178,11 +178,33 @@ static LAST_BUTTON: OnceLock<Mutex<Option<(RawFd, u32, u32, u32)>>> = OnceLock::
 // Per-fd reassembly buffers — messages can span multiple sendmsg/recvmsg calls.
 static RX_BUFS: OnceLock<Mutex<HashMap<RawFd, Vec<u8>>>> = OnceLock::new();
 static TX_BUFS: OnceLock<Mutex<HashMap<RawFd, Vec<u8>>>> = OnceLock::new();
+static LAST_CREATED_WINDOW_ID: OnceLock<Mutex<Option<LastCreatedWindowId>>> = OnceLock::new();
 type CursorEnterCb = Box<dyn FnOnce(i32, i32) + Send>;
 type CursorEnterWatcherKey = (RawFd, u32);
 type CursorEnterWatcherMap = HashMap<CursorEnterWatcherKey, Vec<CursorEnterCb>>;
 static NEXT_TOPLEVEL_CURSOR_ENTER: OnceLock<Mutex<Vec<CursorEnterCb>>> = OnceLock::new();
 static CURSOR_ENTER_WATCHERS: OnceLock<Mutex<CursorEnterWatcherMap>> = OnceLock::new();
+
+#[derive(Clone, Copy)]
+struct LastCreatedWindowId {
+    fd: RawFd,
+    toplevel_id: u32,
+    xdg_surface_id: u32,
+    wl_surface_id: Option<u32>,
+}
+
+impl LastCreatedWindowId {
+    fn as_token(self) -> String {
+        // Stable token format for future per-window Wayland operations.
+        format!(
+            "wayland:{}:{}:{}:{}",
+            self.fd,
+            self.toplevel_id,
+            self.xdg_surface_id,
+            self.wl_surface_id.unwrap_or(0)
+        )
+    }
+}
 
 // ── Toplevel creation callbacks ────────────────────────────────────────────
 //
@@ -710,6 +732,16 @@ fn on_request(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
     // Fire toplevel-created callbacks outside the CONNS lock so that
     // callbacks can freely access connection state if needed.
     if let Some(ref info) = new_toplevel {
+        if let Some(m) = LAST_CREATED_WINDOW_ID.get()
+            && let Ok(mut last) = m.lock()
+        {
+            *last = Some(LastCreatedWindowId {
+                fd: info.fd,
+                toplevel_id: info.toplevel_id,
+                xdg_surface_id: info.xdg_surface_id,
+                wl_surface_id: info.wl_surface_id,
+            });
+        }
         fire_toplevel_callbacks(info);
         arm_first_cursor_enter_watchers(info);
     }
@@ -790,6 +822,12 @@ fn reset_connection_state(fd: RawFd) {
     }
     if let Some(m) = TX_BUFS.get() {
         let _ = m.lock().map(|mut g| g.remove(&fd));
+    }
+    if let Some(m) = LAST_CREATED_WINDOW_ID.get()
+        && let Ok(mut last) = m.lock()
+        && last.is_some_and(|id| id.fd == fd)
+    {
+        *last = None;
     }
     clear_first_cursor_enter_watchers_for_fd(fd);
 }
@@ -1009,6 +1047,14 @@ pub(super) fn send_xdg_toplevel_move() -> bool {
     true
 }
 
+pub(super) fn get_last_created_window_id() -> Option<String> {
+    LAST_CREATED_WINDOW_ID
+        .get()
+        .and_then(|m| m.lock().ok())
+        .and_then(|id| *id)
+        .map(LastCreatedWindowId::as_token)
+}
+
 // ── Hook installation ─────────────────────────────────────────────────────
 
 /// Resolves a libc symbol and creates a `GenericDetour` for it.
@@ -1052,6 +1098,7 @@ pub(super) fn init_wayland_hook() {
     // Initialise all state before any hook fires.
     CONNS.get_or_init(|| Mutex::new(HashMap::new()));
     LAST_BUTTON.get_or_init(|| Mutex::new(None));
+    LAST_CREATED_WINDOW_ID.get_or_init(|| Mutex::new(None));
     RX_BUFS.get_or_init(|| Mutex::new(HashMap::new()));
     TX_BUFS.get_or_init(|| Mutex::new(HashMap::new()));
     NEXT_TOPLEVEL_CURSOR_ENTER.get_or_init(|| Mutex::new(Vec::new()));
@@ -1074,6 +1121,11 @@ pub(super) fn remove_wayland_hook() {
         map.clear();
     }
     if let Some(m) = LAST_BUTTON.get()
+        && let Ok(mut opt) = m.lock()
+    {
+        *opt = None;
+    }
+    if let Some(m) = LAST_CREATED_WINDOW_ID.get()
         && let Ok(mut opt) = m.lock()
     {
         *opt = None;

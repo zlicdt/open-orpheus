@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { BrowserWindow, ipcMain } from "electron";
 import photon from "@silvia-odwyer/photon-node";
 
-import { mainWindow, setWindowId } from "../window";
+import { mainWindow, setWindowId, setWindowInputRegion } from "../window";
 import { parseLrc } from "../lyrics";
 import { sanitizeRelativePath } from "../util";
 import { storage } from "../folders";
@@ -69,6 +69,20 @@ export default function createDesktopLyricsWindow() {
       desktopLyricsWindow.setSize(sz[1], sz[0]);
     }
   );
+
+  desktopLyricsWindow.webContents.ipc.handle(
+    "desktopLyrics.setInputRegion",
+    (_event, x: number, y: number, width: number, height: number) => {
+      if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
+      setWindowInputRegion(
+        desktopLyricsWindow,
+        Math.round(x),
+        Math.round(y),
+        Math.max(0, Math.round(width)),
+        Math.max(0, Math.round(height))
+      );
+    }
+  );
 }
 
 // --- IPC handlers ---
@@ -94,6 +108,13 @@ ipcMain.handle(
     sendToLyricsWindow("desktopLyrics.styleUpdate", styleUpdate);
   }
 );
+
+ipcMain.handle("desktopLyrics.setLocked", (_event, locked: boolean) => {
+  if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
+    desktopLyricsWindow.setResizable(!locked);
+  }
+  sendToLyricsWindow("desktopLyrics.setLocked", locked);
+});
 
 ipcMain.handle("desktopLyrics.updatePlayState", (_event, playing: boolean) => {
   sendToLyricsWindow("desktopLyrics.playStateChange", playing);
