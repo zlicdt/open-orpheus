@@ -4,9 +4,10 @@ import { readdir, stat, rm } from "node:fs/promises";
 import { BrowserWindow } from "electron";
 import packManager from "../pack";
 import WebPack from "../packs/WebPack";
+import { lyricCacheManager } from "../cache/LyricCahceManager";
 import { playCacheManager } from "../cache/PlayCacheManager";
 import { urlCache } from "../orpheus";
-import { lyricCache, wasm as wasmDir } from "../folders";
+import { wasm as wasmDir } from "../folders";
 
 let manageWndInstance: BrowserWindow | null = null;
 
@@ -44,26 +45,7 @@ export default function showManageWindow() {
     const [playCacheInfo, httpStats, lyrics, wasm] = await Promise.all([
       playCacheManager.getInfo(),
       urlCache.getStats(),
-      (async () => {
-        try {
-          const entries = await readdir(lyricCache, { withFileTypes: true });
-          const files = entries.filter((e) => e.isFile());
-          let sizeBytes = 0;
-          await Promise.all(
-            files.map(async (f) => {
-              try {
-                const s = await stat(resolve(lyricCache, f.name));
-                sizeBytes += s.size;
-              } catch {
-                // Skip
-              }
-            })
-          );
-          return { entryCount: files.length, sizeBytes };
-        } catch {
-          return { entryCount: 0, sizeBytes: 0 };
-        }
-      })(),
+      lyricCacheManager.getStats(),
       (async () => {
         try {
           const entries = await readdir(wasmDir, { withFileTypes: true });
@@ -105,7 +87,7 @@ export default function showManageWindow() {
       if (category === "http") {
         await urlCache.clear();
       } else if (category === "lyrics") {
-        await rm(lyricCache, { recursive: true, force: true });
+        await lyricCacheManager.clear();
       } else if (category === "wasm") {
         await rm(wasmDir, { recursive: true, force: true });
       }

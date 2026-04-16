@@ -1,12 +1,13 @@
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-import { data as dataDir, lyricCache } from "../folders";
+import { data as dataDir } from "../folders";
 import { registerCallHandler } from "../calls";
 import { sanitizeRelativePath } from "../util";
 import { getWebDb } from "../database";
 import { existsSync, mkdirSync } from "node:fs";
 import { app } from "electron";
+import { lyricCacheManager } from "../cache/LyricCahceManager";
 import {
   CacheTrackMeta,
   playCacheManager,
@@ -220,22 +221,13 @@ registerCallHandler<[""], [boolean]>("storage.clearCache", async () => {
 registerCallHandler<[string], void>(
   "storage.getTempFile",
   async (event, songId) => {
-    // Gets cached lyric response for the song.
-    const tempFilePath = join(lyricCache, `${songId}`);
     let content = "";
-    if (existsSync(tempFilePath)) {
-      try {
-        content = await readFile(tempFilePath, "utf-8").catch((error) => {
-          console.error(
-            `Error reading temp file for songId ${songId}: ${error.message}`
-          );
-          return "";
-        });
-      } catch (error) {
-        console.error(
-          `Error accessing temp file for songId ${songId}: ${error.message}`
-        );
-      }
+    try {
+      content = (await lyricCacheManager.get(songId)) ?? "";
+    } catch (error) {
+      console.error(
+        `Error reading temp file for songId ${songId}: ${error.message}`
+      );
     }
     event.sender.send(
       "channel.call",
@@ -249,23 +241,19 @@ registerCallHandler<[string], void>(
 
 registerCallHandler<[string, string, string], void>(
   "storage.updatetemp",
-  (event, songId, content, type) => {
+  async (event, songId, content, type) => {
     if (type !== "text/plain") {
       console.error(`Unsupported temp file type: ${type}`);
       return;
     }
 
-    mkdir(lyricCache, { recursive: true }).catch((error) => {
-      console.error(`Error creating temp directory: ${error.message}`);
-    });
-
-    writeFile(join(lyricCache, `${songId}`), content, { flag: "w" }).catch(
-      (error) => {
-        console.error(
-          `Error writing temp file for songId ${songId}: ${error.message}`
-        );
-      }
-    );
+    try {
+      await lyricCacheManager.set(songId, content);
+    } catch (error) {
+      console.error(
+        `Error writing temp file for songId ${songId}: ${error.message}`
+      );
+    }
   }
 );
 
