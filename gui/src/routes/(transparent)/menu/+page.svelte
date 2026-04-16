@@ -25,8 +25,6 @@
   let submenuHoveredIndex = $state(-1);
   let submenuEl: HTMLDivElement | undefined = $state();
 
-  const CURSOR_DEADLINE_MS = 200;
-
   function getApi(): MenuAPI {
     return window.menuApi!;
   }
@@ -68,71 +66,12 @@
     });
   }
 
-  /**
-   * Wayland cursor capture: the compositor will send a pointermove event into
-   * the overlay once it's shown. We listen for that event up to a deadline,
-   * similar to the native @open-orpheus/ui implementation.
-   */
-  function setupCursorCapture(): {
-    promise: Promise<void>;
-    startDeadline: () => void;
-  } {
-    let captured = false;
-    let resolvePromise: (() => void) | null = null;
-
-    const promise = new Promise<void>((resolve) => {
-      resolvePromise = resolve;
-    });
-
-    const finish = () => {
-      resolvePromise?.();
-    };
-
-    const capture = (e: PointerEvent | MouseEvent) => {
-      if (captured) return;
-      captured = true;
-      cleanup();
-      cursorX = e.clientX;
-      cursorY = e.clientY;
-      menuTop = e.clientY; // will be corrected by commitMenuPosition
-      finish();
-    };
-
-    const cleanup = () => {
-      document.removeEventListener("pointerover", capture);
-      document.removeEventListener("pointermove", capture);
-      document.documentElement.removeEventListener("pointerenter", capture);
-      document.removeEventListener("mouseover", capture);
-      document.removeEventListener("mousemove", capture);
-    };
-
-    document.addEventListener("pointerover", capture);
-    document.addEventListener("pointermove", capture);
-    document.documentElement.addEventListener("pointerenter", capture);
-    document.addEventListener("mouseover", capture);
-    document.addEventListener("mousemove", capture);
-
-    const startDeadline = () => {
-      if (captured) return;
-      setTimeout(() => {
-        if (captured) return;
-        captured = true;
-        cleanup();
-        finish();
-      }, CURSOR_DEADLINE_MS);
-    };
-
-    return { promise, startDeadline };
-  }
-
   onMount(() => {
     const api = getApi();
     waylandMode = api.isWayland();
     isSubmenuMode = api.isSubmenu();
 
     if (waylandMode) {
-      const cursor = setupCursorCapture();
-
       api.pull().then((data) => {
         applyColors(data.colors);
         loadTemplates(data.templates);
@@ -141,13 +80,11 @@
         submenuItems = null;
         submenuParentIndex = -1;
         submenuHoveredIndex = -1;
+        cursorX = data.cursorX ?? 0;
+        cursorY = data.cursorY ?? 0;
+        menuTop = cursorY;
         visible = true;
-
-        cursor.startDeadline();
-
-        cursor.promise.then(() => {
-          commitMenuPosition(api);
-        });
+        commitMenuPosition(api);
       });
 
       api.onUpdate((rawItems) => {

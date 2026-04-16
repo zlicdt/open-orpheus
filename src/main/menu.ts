@@ -1,7 +1,10 @@
 import { BrowserWindow, screen } from "electron";
 import { join, normalize } from "node:path";
 
-import { isWayland } from "@open-orpheus/window";
+import {
+  captureNextWindowFirstCursorEnter,
+  isWayland,
+} from "@open-orpheus/window";
 
 import { menuSkin, registerMenuSkinUpdater } from "./menu/skin";
 import type { AppMenuItem, MenuClickHandler } from "./menu/types";
@@ -18,6 +21,8 @@ import packManager from "./pack";
 import SkinPack from "./packs/SkinPack";
 
 registerMenuSkinUpdater();
+
+const WAYLAND_CURSOR_CAPTURE_DEADLINE_MS = 200;
 
 export type { AppMenuItem, AppMenuItemBtn, MenuSkin } from "./menu/types";
 
@@ -122,6 +127,32 @@ export default class AppMenu extends EventTarget {
   // Created fresh each time so the compositor sends pointer-enter,
   // which the renderer uses to capture the real cursor position.
   private showOverlay() {
+    const cursorPosition = new Promise<{ cursorX: number; cursorY: number }>(
+      (resolve) => {
+        let settled = false;
+        const finish = (cursorX = 0, cursorY = 0) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(deadline);
+          resolve({ cursorX, cursorY });
+        };
+
+        const deadline = setTimeout(
+          () => finish(),
+          WAYLAND_CURSOR_CAPTURE_DEADLINE_MS
+        );
+
+        try {
+          captureNextWindowFirstCursorEnter((cursorX, cursorY) => {
+            finish(cursorX, cursorY);
+          });
+        } catch {
+          finish();
+          return;
+        }
+      }
+    );
+
     const wnd = createOverlayWindow();
 
     const dismiss = () => {
@@ -154,15 +185,22 @@ export default class AppMenu extends EventTarget {
       dismiss();
     });
 
-    // Pull-based: the renderer calls menu.pull once SvelteKit has mounted
-    // and has registered its pointermove listener for cursor capture.
-    // We show the window here so the compositor sends pointer-enter AFTER
-    // the listener is in place.
-    wnd.webContents.ipc.handle("menu.pull", () => {
+    // Pull-based: the renderer calls menu.pull once SvelteKit has mounted.
+    // We show the window here, then wait for the native first-enter capture
+    // (or a short timeout fallback) before returning the initial cursor anchor.
+    wnd.webContents.ipc.handle("menu.pull", async () => {
       if (!this.closed && !wnd.isDestroyed()) {
         wnd.show();
       }
-      return { items: this.items, templates: this.templates, colors: menuSkin };
+
+      const { cursorX, cursorY } = await cursorPosition;
+      return {
+        items: this.items,
+        templates: this.templates,
+        colors: menuSkin,
+        cursorX,
+        cursorY,
+      };
     });
   }
 

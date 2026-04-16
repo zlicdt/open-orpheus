@@ -16,6 +16,8 @@ export interface MenuAPI {
     items: unknown[];
     templates: Record<string, string>;
     colors: MenuSkin;
+    cursorX?: number;
+    cursorY?: number;
   }>;
   reportSize(width: number, height: number): void;
   itemClick(menuId: string | null): void;

@@ -10,6 +10,9 @@ import * as addon from "./load.cjs";
 declare module "./load.cjs" {
   function dragWindow(hwnd: Buffer): void;
   function isWayland(): boolean;
+  function captureNextWindowFirstCursorEnter(
+    callback: (x: number, y: number) => void
+  ): void;
 }
 
 export function dragWindow(hwnd: Buffer): void {
@@ -21,4 +24,15 @@ export function isWayland(): boolean {
     throw new Error("isWayland is only supported on Linux");
   }
   return addon.isWayland();
+}
+
+export function captureNextWindowFirstCursorEnter(
+  callback: (x: number, y: number) => void
+): void {
+  if (os.platform() !== "linux") {
+    throw new Error(
+      "captureNextWindowFirstCursorEnter is only supported on Linux"
+    );
+  }
+  addon.captureNextWindowFirstCursorEnter(callback);
 }

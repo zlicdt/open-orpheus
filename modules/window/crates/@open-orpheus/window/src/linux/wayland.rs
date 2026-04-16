@@ -178,6 +178,11 @@ static LAST_BUTTON: OnceLock<Mutex<Option<(RawFd, u32, u32, u32)>>> = OnceLock::
 // Per-fd reassembly buffers — messages can span multiple sendmsg/recvmsg calls.
 static RX_BUFS: OnceLock<Mutex<HashMap<RawFd, Vec<u8>>>> = OnceLock::new();
 static TX_BUFS: OnceLock<Mutex<HashMap<RawFd, Vec<u8>>>> = OnceLock::new();
+type CursorEnterCb = Box<dyn FnOnce(i32, i32) + Send>;
+type CursorEnterWatcherKey = (RawFd, u32);
+type CursorEnterWatcherMap = HashMap<CursorEnterWatcherKey, Vec<CursorEnterCb>>;
+static NEXT_TOPLEVEL_CURSOR_ENTER: OnceLock<Mutex<Vec<CursorEnterCb>>> = OnceLock::new();
+static CURSOR_ENTER_WATCHERS: OnceLock<Mutex<CursorEnterWatcherMap>> = OnceLock::new();
 
 // ── Toplevel creation callbacks ────────────────────────────────────────────
 //
@@ -217,6 +222,70 @@ fn fire_toplevel_callbacks(info: &NewToplevel) {
         for cb in callbacks {
             cb(info);
         }
+    }
+}
+
+pub(super) fn on_next_new_window_first_cursor_enter(
+    cb: impl FnOnce(i32, i32) + Send + 'static,
+) -> bool {
+    let Some(m) = NEXT_TOPLEVEL_CURSOR_ENTER.get() else {
+        return false;
+    };
+    let Ok(mut cbs) = m.lock() else {
+        return false;
+    };
+    cbs.push(Box::new(cb));
+    true
+}
+
+fn arm_first_cursor_enter_watchers(info: &NewToplevel) {
+    let Some(wl_surface_id) = info.wl_surface_id else {
+        return;
+    };
+    let Some(pending) = NEXT_TOPLEVEL_CURSOR_ENTER.get() else {
+        return;
+    };
+    let Ok(mut pending) = pending.lock() else {
+        return;
+    };
+    if pending.is_empty() {
+        return;
+    }
+    let callbacks: Vec<_> = pending.drain(..).collect();
+    drop(pending);
+
+    if let Some(watchers) = CURSOR_ENTER_WATCHERS.get()
+        && let Ok(mut watchers) = watchers.lock()
+    {
+        watchers
+            .entry((info.fd, wl_surface_id))
+            .or_default()
+            .extend(callbacks);
+    }
+}
+
+fn fire_first_cursor_enter_watchers(fd: RawFd, wl_surface_id: u32, x: i32, y: i32) {
+    let Some(watchers) = CURSOR_ENTER_WATCHERS.get() else {
+        return;
+    };
+    let callbacks = {
+        let Ok(mut watchers) = watchers.lock() else {
+            return;
+        };
+        watchers.remove(&(fd, wl_surface_id))
+    };
+    if let Some(callbacks) = callbacks {
+        for callback in callbacks {
+            callback(x, y);
+        }
+    }
+}
+
+fn clear_first_cursor_enter_watchers_for_fd(fd: RawFd) {
+    if let Some(watchers) = CURSOR_ENTER_WATCHERS.get()
+        && let Ok(mut watchers) = watchers.lock()
+    {
+        watchers.retain(|(watch_fd, _), _| *watch_fd != fd);
     }
 }
 
@@ -303,6 +372,14 @@ fn ru32(buf: &[u8], offset: usize) -> Option<u32> {
     buf.get(offset..offset + 4)
         .and_then(|b| b.try_into().ok())
         .map(u32::from_ne_bytes)
+}
+
+#[inline]
+fn rfixed_i32(buf: &[u8], offset: usize) -> Option<i32> {
+    buf.get(offset..offset + 4)
+        .and_then(|b| b.try_into().ok())
+        .map(i32::from_ne_bytes)
+        .map(|value| value >> 8)
 }
 
 /// Reads a Wayland string argument (length-prefixed, NUL-terminated, 4-byte padded).
@@ -411,6 +488,7 @@ fn feed(
             "[wayland] reassembly buffer exceeded 4 MiB — sync lost, resetting state for fd {}",
             fd
         );
+        clear_first_cursor_enter_watchers_for_fd(fd);
         if let Some(m) = CONNS.get()
             && let Ok(mut map) = m.lock()
             && let Some(conn) = map.get_mut(&fd)
@@ -438,17 +516,25 @@ fn on_event(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
     }
 
     if conn.ifaces.get(&oid) == Some(&Iface::WlPointer) {
-        let button_info = handle_pointer_event(conn, oid, op, msg);
+        let pointer_event = handle_pointer_event(conn, oid, op, msg);
         // Drop the CONNS lock before touching LAST_BUTTON to avoid
         // nested-lock ordering issues with send_xdg_toplevel_move.
         drop(guard);
-        if let Some((seat_id, serial, surf_id)) = button_info
+        if let Some((seat_id, serial, surf_id)) = pointer_event.button_info
             && let Some(m) = LAST_BUTTON.get()
             && let Ok(mut opt) = m.lock()
         {
             *opt = Some((fd, seat_id, serial, surf_id));
         }
+        if let Some((wl_surface_id, x, y)) = pointer_event.entered_surface {
+            fire_first_cursor_enter_watchers(fd, wl_surface_id, x, y);
+        }
     }
+}
+
+struct PointerEventOutcome {
+    button_info: Option<(u32, u32, u32)>,
+    entered_surface: Option<(u32, i32, i32)>,
 }
 
 /// Processes a wl_pointer event within the connection.
@@ -459,19 +545,31 @@ fn handle_pointer_event(
     ptr_id: u32,
     op: u16,
     msg: &[u8],
-) -> Option<(u32, u32, u32)> {
+) -> PointerEventOutcome {
     match op {
         EVT_ENTER => {
             // enter(serial: uint, surface: object, sx: fixed, sy: fixed) — 24 B
-            if let Some(surf_id) = ru32(msg, 12) {
+            if let (Some(surf_id), Some(x), Some(y)) =
+                (ru32(msg, 12), rfixed_i32(msg, 16), rfixed_i32(msg, 20))
+            {
                 conn.pointer_focus.insert(ptr_id, surf_id);
+                return PointerEventOutcome {
+                    button_info: None,
+                    entered_surface: Some((surf_id, x, y)),
+                };
             }
-            None
+            PointerEventOutcome {
+                button_info: None,
+                entered_surface: None,
+            }
         }
         EVT_LEAVE => {
             // A pointer can focus at most one surface at a time; just remove it.
             conn.pointer_focus.remove(&ptr_id);
-            None
+            PointerEventOutcome {
+                button_info: None,
+                entered_surface: None,
+            }
         }
         EVT_BUTTON => {
             // button(serial: uint, time: uint, button: uint, state: uint) — 24 B
@@ -487,12 +585,21 @@ fn handle_pointer_event(
                 // deferred lookup return None.  Capturing it here keeps it valid.
                 let seat_id = conn.pointer_seat.get(&ptr_id).copied();
                 if let (Some(surf_id), Some(seat_id)) = (surf_id, seat_id) {
-                    return Some((seat_id, serial, surf_id));
+                    return PointerEventOutcome {
+                        button_info: Some((seat_id, serial, surf_id)),
+                        entered_surface: None,
+                    };
                 }
             }
-            None
+            PointerEventOutcome {
+                button_info: None,
+                entered_surface: None,
+            }
         }
-        _ => None,
+        _ => PointerEventOutcome {
+            button_info: None,
+            entered_surface: None,
+        },
     }
 }
 
@@ -604,6 +711,7 @@ fn on_request(fd: RawFd, oid: u32, op: u16, msg: &[u8]) {
     // callbacks can freely access connection state if needed.
     if let Some(ref info) = new_toplevel {
         fire_toplevel_callbacks(info);
+        arm_first_cursor_enter_watchers(info);
     }
 }
 
@@ -683,6 +791,7 @@ fn reset_connection_state(fd: RawFd) {
     if let Some(m) = TX_BUFS.get() {
         let _ = m.lock().map(|mut g| g.remove(&fd));
     }
+    clear_first_cursor_enter_watchers_for_fd(fd);
 }
 
 // ── Hook callbacks ─────────────────────────────────────────────────────────
@@ -945,6 +1054,8 @@ pub(super) fn init_wayland_hook() {
     LAST_BUTTON.get_or_init(|| Mutex::new(None));
     RX_BUFS.get_or_init(|| Mutex::new(HashMap::new()));
     TX_BUFS.get_or_init(|| Mutex::new(HashMap::new()));
+    NEXT_TOPLEVEL_CURSOR_ENTER.get_or_init(|| Mutex::new(Vec::new()));
+    CURSOR_ENTER_WATCHERS.get_or_init(|| Mutex::new(HashMap::new()));
     ON_TOPLEVEL_CREATED.get_or_init(|| Mutex::new(Vec::new()));
 
     install_hook!(HOOK_CONNECT, "connect", FnConnect, hook_connect);
@@ -976,6 +1087,16 @@ pub(super) fn remove_wayland_hook() {
         && let Ok(mut map) = m.lock()
     {
         map.clear();
+    }
+    if let Some(m) = NEXT_TOPLEVEL_CURSOR_ENTER.get()
+        && let Ok(mut cbs) = m.lock()
+    {
+        cbs.clear();
+    }
+    if let Some(m) = CURSOR_ENTER_WATCHERS.get()
+        && let Ok(mut watchers) = m.lock()
+    {
+        watchers.clear();
     }
     if let Some(m) = ON_TOPLEVEL_CREATED.get()
         && let Ok(mut cbs) = m.lock()

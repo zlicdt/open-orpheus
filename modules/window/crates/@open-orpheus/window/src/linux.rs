@@ -1,7 +1,10 @@
 use neon::{
+    event::Channel,
     handle::Handle,
-    prelude::{Context, Cx, ModuleContext},
+    object::Object,
+    prelude::{Context, Cx, JsFunction, ModuleContext},
     result::NeonResult,
+    types::JsValue,
     types::{JsBuffer, buffer::TypedArray},
 };
 #[cfg(target_arch = "x86_64")]
@@ -70,6 +73,49 @@ fn drag_window<'cx>(cx: &mut Cx<'cx>, handle: Handle<JsBuffer>) -> NeonResult<()
     }
 
     Ok(())
+}
+
+#[neon::export]
+fn capture_next_window_first_cursor_enter<'cx>(
+    cx: &mut Cx<'cx>,
+    callback: Handle<'cx, JsFunction>,
+) -> NeonResult<()> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if disable_wayland_hooks() {
+            let err_msg = cx.string(
+                "captureNextWindowFirstCursorEnter is unavailable when Wayland hooks are disabled",
+            );
+            return cx.throw(err_msg);
+        }
+
+        let channel: Channel = cx.channel();
+        let callback = callback.root(cx);
+        if !wayland::on_next_new_window_first_cursor_enter(move |x, y| {
+            channel.send(move |mut cx| {
+                let callback = callback.into_inner(&mut cx);
+                let this = cx.undefined();
+                let args: [Handle<JsValue>; 2] =
+                    [cx.number(x as f64).upcast(), cx.number(y as f64).upcast()];
+                callback.call(&mut cx, this, args)?;
+                Ok(())
+            });
+        }) {
+            let err_msg = cx.string(
+                "captureNextWindowFirstCursorEnter is unavailable because Wayland hooks are not initialized",
+            );
+            return cx.throw(err_msg);
+        }
+
+        return Ok(());
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let err_msg =
+            cx.string("captureNextWindowFirstCursorEnter is only supported on Linux x86_64");
+        cx.throw(err_msg)
+    }
 }
 
 #[neon::main]
