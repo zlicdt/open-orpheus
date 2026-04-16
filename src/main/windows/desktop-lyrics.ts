@@ -17,6 +17,16 @@ function sendToLyricsWindow(channel: string, data: unknown) {
   }
 }
 
+function performAction(action: string) {
+  if (mainWindow) {
+    mainWindow.webContents.send(
+      "channel.call",
+      "player.ondesktoplyricaction",
+      action
+    );
+  }
+}
+
 export default function createDesktopLyricsWindow() {
   desktopLyricsWindow = new BrowserWindow({
     width: 800, // TODO: Proper sizes
@@ -40,6 +50,12 @@ export default function createDesktopLyricsWindow() {
   }
   setWindowId(desktopLyricsWindow, "desktop_lyrics");
 
+  desktopLyricsWindow.on("close", (e) => {
+    // Not closing, but telling NCM to hide.
+    e.preventDefault();
+    performAction("close");
+  });
+
   desktopLyricsWindow.webContents.ipc.handle(
     "desktopLyrics.requestFullUpdate",
     () => {
@@ -52,13 +68,7 @@ export default function createDesktopLyricsWindow() {
   desktopLyricsWindow.webContents.ipc.handle(
     "desktopLyrics.performAction",
     (_event, action: string) => {
-      if (mainWindow) {
-        mainWindow.webContents.send(
-          "channel.call",
-          "player.ondesktoplyricaction",
-          action
-        );
-      }
+      performAction(action);
     }
   );
 
