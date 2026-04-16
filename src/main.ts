@@ -29,10 +29,12 @@ import showPackgeDownloadWindow from "./main/windows/package-download";
 import { setMainWindow } from "./main/window";
 
 import type WebPack from "./main/packs/WebPack";
-
-// This is flags is required because package window is shown before main window, and we don't want to quit the app when package window is closed for any reason.
-let appStarted = false;
-let quitting = false;
+import {
+  markStarted,
+  started as appStarted,
+  quitting,
+  markQuitting,
+} from "./main/lifecycle";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -208,7 +210,7 @@ app.on("ready", async () => {
 
     createWindow();
 
-    appStarted = true;
+    markStarted();
   } catch (error) {
     if (error) {
       dialog.showErrorBox(
@@ -225,6 +227,7 @@ app.on("ready", async () => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on("window-all-closed", () => {
+  // Make sure we don't quit because of package download window being closed before main window has started
   if (process.platform !== "darwin" && appStarted) {
     app.quit();
   }
@@ -239,8 +242,8 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
-  // Allow main window to be closed.
-  quitting = true;
+  // Allow some windows to be closed.
+  markQuitting();
 });
 
 app.on("second-instance", () => {

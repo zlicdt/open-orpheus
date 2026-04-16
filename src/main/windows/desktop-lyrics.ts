@@ -8,6 +8,7 @@ import { mainWindow, setWindowId, setWindowInputRegion } from "../window";
 import { parseLrc } from "../lyrics";
 import { sanitizeRelativePath } from "../util";
 import { storage } from "../folders";
+import { quitting } from "../lifecycle";
 
 let desktopLyricsWindow: BrowserWindow | null = null;
 
@@ -51,6 +52,7 @@ export default function createDesktopLyricsWindow() {
   setWindowId(desktopLyricsWindow, "desktop_lyrics");
 
   desktopLyricsWindow.on("close", (e) => {
+    if (quitting) return; // If the app is quitting we allow the window to close
     // Not closing, but telling NCM to hide.
     e.preventDefault();
     performAction("close");
