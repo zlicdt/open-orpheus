@@ -3,15 +3,11 @@ import os from "node:os";
 
 import { BrowserWindow, screen } from "electron";
 
-export async function pngFromIco(
-  icoData: ArrayBuffer | Buffer<ArrayBufferLike>
-): Promise<ArrayBuffer> {
-  const images = await import("icojs").then((m) => m.parseICO(icoData));
-  if (images.length === 0) {
-    throw new Error("No images found in ICO file");
-  }
-  const buf = Buffer.from(images[0].buffer);
-  return buf.buffer;
+export async function pngFromIco(icoData: Uint8Array): Promise<Uint8Array> {
+  const photon = await import("@silvia-odwyer/photon-node");
+  const icoImage = photon.PhotonImage.new_from_byteslice(icoData);
+  const pngData = icoImage.get_bytes();
+  return pngData;
 }
 
 export function sanitizeRelativePath(
