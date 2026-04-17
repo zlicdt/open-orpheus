@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { resolve } from "node:path";
 
-export class URLCacheManager {
+export default class URLCacheManager {
   private readonly inFlight = new Map<
     string,
     Promise<{ contentType: string; body: Buffer }>

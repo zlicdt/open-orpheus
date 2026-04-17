@@ -4,10 +4,8 @@ import { readdir, stat, rm } from "node:fs/promises";
 import { BrowserWindow } from "electron";
 import packManager from "../pack";
 import WebPack from "../packs/WebPack";
-import { lyricCacheManager } from "../cache/LyricCahceManager";
-import { playCacheManager } from "../cache/PlayCacheManager";
-import { urlCache } from "../orpheus";
 import { wasm as wasmDir } from "../folders";
+import { lyricCacheManager, playCacheManager, urlCacheManager } from "../cache";
 
 let manageWndInstance: BrowserWindow | null = null;
 
@@ -44,7 +42,7 @@ export default function showManageWindow() {
   manageWnd.webContents.ipc.handle("manage.getCacheStats", async () => {
     const [playCacheInfo, httpStats, lyrics, wasm] = await Promise.all([
       playCacheManager.getInfo(),
-      urlCache.getStats(),
+      urlCacheManager.getStats(),
       lyricCacheManager.getStats(),
       (async () => {
         try {
@@ -85,7 +83,7 @@ export default function showManageWindow() {
     "manage.clearResources",
     async (_, category: "http" | "lyrics" | "wasm") => {
       if (category === "http") {
-        await urlCache.clear();
+        await urlCacheManager.clear();
       } else if (category === "lyrics") {
         await lyricCacheManager.clear();
       } else if (category === "wasm") {

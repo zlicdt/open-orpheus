@@ -6,8 +6,8 @@ import { ipcMain, Protocol } from "electron";
 import AudioStreamer from "./audio/streamer";
 
 import type { AudioPlayInfo } from "src/preload/Player";
-import { playCacheManager } from "./cache/PlayCacheManager";
 import { mainWindow } from "./window";
+import { playCacheManager } from "./cache";
 
 const audioStreamer = new AudioStreamer();
 

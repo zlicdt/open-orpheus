@@ -8,7 +8,15 @@ export const userdata = resolve(data, "userdata");
 export const storage = resolve(data, "storage");
 export const wasm = resolve(data, "wasm");
 
-export const cache = resolve(data, "cache");
-export const lyricCache = resolve(cache, "lyrics");
-export const httpCache = resolve(cache, "http");
-export const playCache = resolve(cache, "play");
+export const defaultCache = resolve(data, "cache");
+
+export let cache = defaultCache;
+export let download = "";
+
+export function setCachePath(path: string) {
+  cache = path;
+}
+
+export function setDownloadPath(path: string) {
+  download = path;
+}

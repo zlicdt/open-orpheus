@@ -8,12 +8,9 @@ import unzipper from "unzipper";
 import packManager from "./pack";
 import WebPack from "./packs/WebPack";
 import { sanitizeRelativePath } from "./util";
-import { storage as storageDir, httpCache, wasm } from "./folders";
-import { URLCacheManager } from "./cache/URLCacheManager";
+import { storage as storageDir, wasm } from "./folders";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-
-export const urlCache = new URLCacheManager(httpCache);
 
 class NetworkError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -175,11 +172,12 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
       }
       return await loadFromFilePath(parsedUrl.pathname);
     case "cache": {
+      const urlCacheManager = (await import("./cache")).urlCacheManager;
       const url = parsedUrl.search.substring(1); // remove leading '?'
       if (!url) {
         throw new LoadError("Bad Request: Missing URL parameter", 400);
       }
-      const cached = await urlCache.getOrFetch(url, async () => {
+      const cached = await urlCacheManager.getOrFetch(url, async () => {
         const response = await fetch(url);
         if (!response.ok) {
           throw new LoadError(

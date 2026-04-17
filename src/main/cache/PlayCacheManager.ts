@@ -9,7 +9,6 @@ import {
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { playCache } from "../folders";
 import { mainWindow } from "../window";
 
 // #region Types
@@ -62,13 +61,15 @@ export type CacheTrackMeta = {
 
 // #region PlayCacheManager
 
-class PlayCacheManager {
+export default class PlayCacheManager {
   private config: PlayCacheConfig | null = null;
   /** In-memory index of cached tracks, keyed by songId */
   private trackIndex = new Map<string, CacheTrackMeta>();
   private initPromise: Promise<void>;
+  private cachePath: string;
 
-  constructor() {
+  constructor(cachePath: string) {
+    this.cachePath = cachePath;
     this.initPromise = this.buildIndex();
   }
 
@@ -76,11 +77,11 @@ class PlayCacheManager {
 
   private async buildIndex(): Promise<void> {
     try {
-      await mkdir(playCache, { recursive: true });
-      const entries = await readdir(playCache, { withFileTypes: true });
+      await mkdir(this.cachePath, { recursive: true });
+      const entries = await readdir(this.cachePath, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        const metaPath = resolve(playCache, entry.name, "meta.json");
+        const metaPath = resolve(this.cachePath, entry.name, "meta.json");
         try {
           const raw = await readFile(metaPath, "utf-8");
           const meta: CacheTrackMeta = JSON.parse(raw);
@@ -127,7 +128,7 @@ class PlayCacheManager {
       ABName: this.config?.ABName ?? "PH-PC-Cache-Switch",
       autoCacheSize,
       autoCacheSizeReal: autoCacheSize,
-      cachePath: playCache,
+      cachePath: this.cachePath,
       clearLimitMax: userSettingSize,
       clearToLimit: Math.floor(userSettingSize * 0.8),
       configJson: this.config?.configJson ?? "",
@@ -160,7 +161,7 @@ class PlayCacheManager {
     const meta = this.trackIndex.get(songId);
     if (!meta) return null;
 
-    const audioPath = resolve(playCache, songId, "audio");
+    const audioPath = resolve(this.cachePath, songId, "audio");
     if (!existsSync(audioPath)) {
       // Audio file missing — remove from index
       this.trackIndex.delete(songId);
@@ -191,7 +192,7 @@ class PlayCacheManager {
   ): Promise<void> {
     await this.ready();
 
-    const songDir = resolve(playCache, songId);
+    const songDir = resolve(this.cachePath, songId);
     await mkdir(songDir, { recursive: true });
 
     const now = Math.floor(Date.now() / 1000);
@@ -255,7 +256,7 @@ class PlayCacheManager {
     const meta = this.trackIndex.get(songId);
     this.trackIndex.delete(songId);
 
-    const songDir = resolve(playCache, songId);
+    const songDir = resolve(this.cachePath, songId);
     try {
       await rm(songDir, { recursive: true, force: true });
     } catch {
@@ -272,7 +273,7 @@ class PlayCacheManager {
     const tracks = Array.from(this.trackIndex.values());
     this.trackIndex.clear();
     try {
-      await rm(playCache, { recursive: true, force: true });
+      await rm(this.cachePath, { recursive: true, force: true });
     } catch {
       // Already gone
     }
@@ -286,7 +287,7 @@ class PlayCacheManager {
   // #region Helpers
 
   private async writeMeta(songId: string, meta: CacheTrackMeta): Promise<void> {
-    const metaPath = resolve(playCache, songId, "meta.json");
+    const metaPath = resolve(this.cachePath, songId, "meta.json");
     await writeFile(metaPath, JSON.stringify(meta));
   }
 
@@ -318,7 +319,7 @@ class PlayCacheManager {
 
   private async getDiskFreeGB(): Promise<number> {
     try {
-      const stats = await statfs(playCache);
+      const stats = await statfs(this.cachePath);
       return (stats.bfree * stats.bsize) / (1024 * 1024 * 1024);
     } catch {
       return 0;
@@ -327,7 +328,5 @@ class PlayCacheManager {
 
   // #endregion
 }
-
-export const playCacheManager = new PlayCacheManager();
 
 // #endregion

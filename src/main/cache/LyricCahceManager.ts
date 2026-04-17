@@ -9,8 +9,6 @@ import {
 } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
-import { lyricCache } from "../folders";
-
 type LyricCacheEntry = {
   mtime: number;
   size: number;
@@ -189,5 +187,3 @@ export default class LyricCacheManager {
     return this.evictionPromise;
   }
 }
-
-export const lyricCacheManager = new LyricCacheManager(lyricCache);

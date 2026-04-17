@@ -1,19 +1,27 @@
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
 
-import { data as dataDir } from "../folders";
+import { app } from "electron";
+
+import {
+  data as dataDir,
+  defaultCache,
+  setCachePath,
+  setDownloadPath,
+} from "../folders";
 import { registerCallHandler } from "../calls";
 import { sanitizeRelativePath } from "../util";
 import { getWebDb } from "../database";
-import { existsSync, mkdirSync } from "node:fs";
-import { app } from "electron";
-import { lyricCacheManager } from "../cache/LyricCahceManager";
 import {
   CacheTrackMeta,
-  playCacheManager,
   type PlayCacheConfig,
   type PlayCacheInfo,
 } from "../cache/PlayCacheManager";
+import createCacheManager, {
+  lyricCacheManager,
+  playCacheManager,
+} from "../cache";
 
 registerCallHandler<[string, string, string], [string, string]>(
   "storage.init",
@@ -22,10 +30,13 @@ registerCallHandler<[string, string, string], [string, string]>(
       downloadDir = resolve(app.getPath("downloads"), "CloudMusic");
     }
     if (!cacheDir) {
-      cacheDir = resolve(join(dataDir, "cache"));
+      cacheDir = defaultCache;
     }
     mkdirSync(downloadDir, { recursive: true });
     mkdirSync(cacheDir, { recursive: true });
+    setDownloadPath(downloadDir);
+    setCachePath(cacheDir);
+    createCacheManager();
     return [downloadDir, cacheDir];
   }
 );
