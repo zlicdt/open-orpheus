@@ -52,6 +52,7 @@ await writeFile(resolve(fakeAppDir, rpmOptions.name), "");
 await cp(resolve(projectRoot, "LICENSE"), resolve(fakeAppDir, "LICENSE"));
 
 // --- Step 2: Run electron-installer-redhat to generate scaffolding ---
+// eslint-disable-next-line import/no-unresolved
 const { Installer } = await import("electron-installer-redhat");
 
 const installer = new Installer({
