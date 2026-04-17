@@ -15,6 +15,7 @@ import {
 } from "../window";
 import AppMenu, { AppMenuItem } from "../menu";
 import showManageWindow from "../windows/manage";
+import { registerGlobalShortcut, unregisterGlobalShortcut } from "../shortcuts";
 
 function shouldApplyScaleFactor() {
   // TODO: Confirm macOS desired behavior, Windows and Linux is already tested to be correct
@@ -227,20 +228,58 @@ registerCallHandler<[], void>("winhelper.destroyWindow", (event) => {
   wnd.close();
 });
 
-registerCallHandler<[string, number[], boolean, { id: string }], void>(
+registerCallHandler<[string, string[], boolean, { id: string }], void>(
   "winhelper.registerHotkey",
   (event, name, keys, isGlobal, extra) => {
-    console.warn(
-      "winhelper.registerHotkey is not implemented yet, returning dummy results."
-    );
     // 1409: being used
     // 0: success
+    if (!isGlobal) {
+      event.sender.send(
+        "channel.call",
+        "winhelper.onRegisterHotkeyResult",
+        name,
+        isGlobal,
+        0,
+        extra
+      );
+      return;
+    }
+    const success = registerGlobalShortcut(name, keys, () => {
+      event.sender.send("channel.call", "winhelper.onHotkey", name, isGlobal);
+    });
+    console.log(success);
     event.sender.send(
       "channel.call",
       "winhelper.onRegisterHotkeyResult",
       name,
       isGlobal,
-      isGlobal ? 1409 : 0,
+      success ? 0 : 1409,
+      extra
+    );
+  }
+);
+
+registerCallHandler<[string, string[], boolean, { id: string }], void>(
+  "winhelper.unregisterHotkey",
+  (event, name, isGlobal, extra) => {
+    if (!isGlobal) {
+      event.sender.send(
+        "channel.call",
+        "winhelper.onUnregisterHotkeyResult",
+        name,
+        isGlobal,
+        0,
+        extra
+      );
+      return;
+    }
+    unregisterGlobalShortcut(name);
+    event.sender.send(
+      "channel.call",
+      "winhelper.onUnregisterHotkeyResult",
+      name,
+      isGlobal,
+      0,
       extra
     );
   }
