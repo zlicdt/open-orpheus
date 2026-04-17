@@ -247,7 +247,6 @@ registerCallHandler<[string, string[], boolean, { id: string }], void>(
     const success = registerGlobalShortcut(name, keys, () => {
       event.sender.send("channel.call", "winhelper.onHotkey", name, isGlobal);
     });
-    console.log(success);
     event.sender.send(
       "channel.call",
       "winhelper.onRegisterHotkeyResult",
