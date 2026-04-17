@@ -46,7 +46,7 @@ export default function registerAudioStreamerScheme(protocol: Protocol) {
         const workletPath = path.join(
           __dirname,
           "worklets",
-          path.resolve(requestUrl.pathname)
+          path.normalize(requestUrl.pathname)
         );
         try {
           const code = await readFile(workletPath, "utf-8");
