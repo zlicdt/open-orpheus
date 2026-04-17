@@ -109,7 +109,28 @@ const onPlayProgress = () => {
     bufferProgress
   );
 };
-player.audio.addEventListener("timeupdate", onPlayProgress);
+// NCM expects onPlayProgress to be called as fast as possible during playback
+let rafId: number | null = null;
+function startProgressRaf() {
+  if (rafId !== null) return;
+  const loop = () => {
+    onPlayProgress();
+    rafId = requestAnimationFrame(loop);
+  };
+  rafId = requestAnimationFrame(loop);
+}
+function stopProgressRaf() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+}
+["play", "playing"].forEach((e) =>
+  player.audio.addEventListener(e, startProgressRaf)
+);
+["pause", "stalled", "ended", "error"].forEach((e) =>
+  player.audio.addEventListener(e, stopProgressRaf)
+);
 ipcRenderer.on("audio.onProgress", (event, progress) => {
   bufferProgress = progress;
   onPlayProgress();

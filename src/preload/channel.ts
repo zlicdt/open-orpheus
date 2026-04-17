@@ -19,7 +19,8 @@ export function fireNativeCall<Args extends unknown[]>(
   command: string,
   ...args: Args
 ) {
-  if (CALL_DEBUG) {
+  if (CALL_DEBUG && command !== "audioplayer.onPlayProgress") {
+    // Avoid logging the very frequent onPlayProgress calls to reduce noise
     console.debug(`Received nativeCall: ${command} with args:`, args);
   }
   const callback = nativeCallbacks.get(command);
