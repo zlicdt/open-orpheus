@@ -198,7 +198,7 @@ app.on("ready", async () => {
     await Promise.all([
       import("./main/channel"),
       // Make sure we handle KV storage IPC calls
-      import("./main/storage"),
+      import("./main/kv"),
       prepareDeviceId(),
       packManager.getPack<WebPack>("web").readPack(),
       import("./main/windows/desktop-lyrics").then((m) => {

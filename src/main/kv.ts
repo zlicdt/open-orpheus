@@ -1,16 +1,6 @@
 import { ipcMain } from "electron";
 
-import { getNativeDb, NATIVE_KV_TABLE } from "./database";
-
-// #region Module state
-
-const TABLE = NATIVE_KV_TABLE;
-
-function db() {
-  return getNativeDb();
-}
-
-// #endregion
+import { getNativeDb as db, NATIVE_KV_TABLE } from "./database";
 
 // #region API
 
@@ -18,7 +8,7 @@ type KvValue = string | Uint8Array;
 
 export function kvGet(key: string): KvValue | null {
   const row = db()
-    .prepare(`SELECT value FROM ${TABLE} WHERE key = ? LIMIT 1`)
+    .prepare(`SELECT value FROM ${NATIVE_KV_TABLE} WHERE key = ? LIMIT 1`)
     .get(key) as { value: KvValue } | undefined;
   return row?.value ?? null;
 }
@@ -26,7 +16,7 @@ export function kvGet(key: string): KvValue | null {
 export function kvSet(key: string, value: KvValue): void {
   db()
     .prepare(
-      `INSERT INTO ${TABLE} (key, value, updated_at)
+      `INSERT INTO ${NATIVE_KV_TABLE} (key, value, updated_at)
        VALUES (?, ?, unixepoch())
        ON CONFLICT(key) DO UPDATE SET
          value      = excluded.value,
@@ -37,19 +27,21 @@ export function kvSet(key: string, value: KvValue): void {
 
 export function kvHas(key: string): boolean {
   return Boolean(
-    db().prepare(`SELECT 1 FROM ${TABLE} WHERE key = ? LIMIT 1`).get(key)
+    db()
+      .prepare(`SELECT 1 FROM ${NATIVE_KV_TABLE} WHERE key = ? LIMIT 1`)
+      .get(key)
   );
 }
 
 export function kvDelete(key: string): boolean {
   const result = db()
-    .prepare(`DELETE FROM ${TABLE} WHERE key = ?`)
+    .prepare(`DELETE FROM ${NATIVE_KV_TABLE} WHERE key = ?`)
     .run(key) as { changes: number | bigint };
   return Number(result.changes) > 0;
 }
 
 export function kvClear(): void {
-  db().exec(`DELETE FROM ${TABLE}`);
+  db().exec(`DELETE FROM ${NATIVE_KV_TABLE}`);
 }
 
 export function kvSetJson<T>(key: string, value: T): void {
