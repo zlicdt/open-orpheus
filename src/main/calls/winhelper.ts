@@ -10,12 +10,14 @@ import { getWindowScaleFactor, pngFromIco } from "../util";
 import {
   getMenus,
   getWindowById,
+  mainWindow,
   setMaximumSize,
   setMinimumSize,
 } from "../window";
 import AppMenu, { AppMenuItem } from "../menu";
 import showManageWindow from "../windows/manage";
 import { registerGlobalShortcut, unregisterGlobalShortcut } from "../shortcuts";
+import { kvGet } from "../kv";
 
 function shouldApplyScaleFactor() {
   // TODO: Confirm macOS desired behavior, Windows and Linux is already tested to be correct
@@ -324,8 +326,12 @@ registerCallHandler<MenuRequest, void>(
     id = 0; // TODO: id doesn't seem to be id, what it is?
     const menus = getMenus(wnd);
     const parsedMenuData = parseMenuData(data);
+    const injectShowMainWindowMenuItem =
+      os.platform() === "linux" &&
+      kvGet("tray.clickBehavior") === "always-show-menu";
     for (let i = 0; i < parsedMenuData.content.length; i++) {
       const item = parsedMenuData.content[i];
+      // Inject "Manage Open Orpheus" menu item before "Settings" menu item
       if (
         item.image_path &&
         item.image_path.indexOf("menu/setting.svg") !== -1
@@ -336,15 +342,33 @@ registerCallHandler<MenuRequest, void>(
           enable: true,
           children: null,
           image_color: "#00000000",
-          menu_id: "manageOpenOrpheus",
+          menu_id: "openOrpheus.manage",
           text: "管理 Open Orpheus",
         });
-        break;
+        i++; // Skip the injected menu item
+      }
+      // Inject show main window menu item if tray.clickBehavior is "always-show-menu"
+      if (injectShowMainWindowMenuItem && item.menu_id === "exitApp") {
+        parsedMenuData.content.splice(i, 0, {
+          menu: true,
+          separator: false,
+          enable: true,
+          children: null,
+          image_color: "#00000000",
+          menu_id: "openOrpheus.showMainWindow",
+          text: "显示主窗口",
+        });
+        i++; // Skip the injected menu item
       }
     }
     const onClick = (itemId: string | null) => {
-      if (itemId === "manageOpenOrpheus") {
+      if (itemId === "openOrpheus.manage") {
         showManageWindow();
+        return;
+      }
+      if (itemId === "openOrpheus.showMainWindow") {
+        mainWindow.show();
+        mainWindow.focus();
         return;
       }
       event.sender.send("channel.call", "winhelper.onmenuclick", itemId, id);

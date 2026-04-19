@@ -2,9 +2,51 @@ import { ipcMain } from "electron";
 
 import { getNativeDb as db, NATIVE_KV_TABLE } from "./database";
 
+const eventTarget = new EventTarget();
+export const addEventListener = eventTarget.addEventListener.bind(eventTarget);
+export const removeEventListener =
+  eventTarget.removeEventListener.bind(eventTarget);
+
 // #region API
 
 type KvValue = string | Uint8Array;
+
+export type KvChangeEvent = CustomEvent<{
+  key: string;
+  current: KvValue;
+  previous: KvValue | null;
+}>;
+
+export type KvAddEvent = CustomEvent<{ key: string; value: KvValue }>;
+export type KvRemoveEvent = CustomEvent<{ key: string }>;
+
+function dispatchAdd(key: string, value: KvValue): void {
+  eventTarget.dispatchEvent(
+    new CustomEvent("add", {
+      detail: { key, value },
+    }) as KvAddEvent
+  );
+}
+
+function dispatchChange(
+  key: string,
+  current: KvValue,
+  previous: KvValue | null
+): void {
+  eventTarget.dispatchEvent(
+    new CustomEvent("change", {
+      detail: { key, current, previous },
+    }) as KvChangeEvent
+  );
+}
+
+function dispatchRemove(key: string): void {
+  eventTarget.dispatchEvent(
+    new CustomEvent("remove", {
+      detail: { key },
+    }) as KvRemoveEvent
+  );
+}
 
 type CacheEntry = {
   value: KvValue;
@@ -79,6 +121,9 @@ export function kvGet(key: string): KvValue | null {
 }
 
 export function kvSet(key: string, value: KvValue): void {
+  const previousRaw = kvGet(key);
+  const isNew = previousRaw === null;
+
   db()
     .prepare(
       `INSERT INTO ${NATIVE_KV_TABLE} (key, value, updated_at)
@@ -89,6 +134,11 @@ export function kvSet(key: string, value: KvValue): void {
     )
     .run(key, value);
   setCacheValue(key, value);
+
+  if (isNew) {
+    dispatchAdd(key, value);
+  }
+  dispatchChange(key, value, previousRaw);
 }
 
 export function kvHas(key: string): boolean {
@@ -110,13 +160,18 @@ export function kvDelete(key: string): boolean {
   const deleted = Number(result.changes) > 0;
   if (deleted) {
     cache.delete(key);
+    dispatchRemove(key);
   }
   return deleted;
 }
 
 export function kvClear(): void {
+  const keysToDelete = Array.from(cache.keys());
   db().exec(`DELETE FROM ${NATIVE_KV_TABLE}`);
   cache.clear();
+  for (const key of keysToDelete) {
+    dispatchRemove(key);
+  }
 }
 
 export function kvSetJson<T>(key: string, value: T): void {

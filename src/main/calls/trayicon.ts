@@ -1,8 +1,38 @@
+import os from "node:os";
+
+import { Menu, MenuItem, nativeImage } from "electron";
+
 import { pngFromIco } from "../util";
 import { loadFromOrpheusUrl } from "../orpheus";
-import { get, install, setIcon, setTooltip, uninstall } from "../tray";
+import { get, install, setIcon, setMenu, setTooltip, uninstall } from "../tray";
 import { registerCallHandler } from "../calls";
-import { nativeImage } from "electron";
+import { addEventListener as addKVEventListener, KvChangeEvent } from "../kv";
+import { mainWindow } from "../window";
+
+if (os.platform() === "linux") {
+  addKVEventListener("change", (event: KvChangeEvent) => {
+    const { key, current: value } = event.detail;
+    if (key === "tray.clickBehavior") {
+      if (value === "with-native-menu") {
+        const menu = new Menu();
+        menu.append(
+          new MenuItem({
+            label: "显示菜单",
+            click: () => {
+              mainWindow.webContents.send(
+                "channel.call",
+                "trayicon.onrightclick"
+              );
+            },
+          })
+        );
+        setMenu(menu);
+      } else {
+        setMenu(null);
+      }
+    }
+  });
+}
 
 registerCallHandler<[string], void>(
   "trayicon.setIcon",

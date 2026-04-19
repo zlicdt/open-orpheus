@@ -51,6 +51,7 @@ export default [
       globals: {
         __APP_VERSION__: "readonly",
         orpheus: "readonly",
+        kv: "readonly",
       },
     },
     settings: {

@@ -11,6 +11,9 @@
   import Database from "@lucide/svelte/icons/database";
   import LocalResources from "./LocalResources.svelte";
 
+  import TableOfContents from "@lucide/svelte/icons/table-of-contents";
+  import Tray from "./Tray.svelte";
+
   import Bug from "@lucide/svelte/icons/bug";
   import Debug from "./Debug.svelte";
 
@@ -26,6 +29,12 @@
       name: "本地资源",
       icon: Database,
       component: LocalResources,
+    },
+    {
+      id: "tray",
+      name: "托盘菜单",
+      icon: TableOfContents,
+      component: Tray,
     },
     {
       id: "debug",

@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import * as kv from "../storage";
 
 contextBridge.exposeInMainWorld("orpheus", {
+  platform: process.platform,
+
   getWebPackCommitHash: () => ipcRenderer.invoke("manage.getWebPackCommitHash"),
 
   getCacheStats: () => ipcRenderer.invoke("manage.getCacheStats"),
