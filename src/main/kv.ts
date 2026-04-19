@@ -6,11 +6,76 @@ import { getNativeDb as db, NATIVE_KV_TABLE } from "./database";
 
 type KvValue = string | Uint8Array;
 
+type CacheEntry = {
+  value: KvValue;
+  hits: number;
+  lastAccessSeq: number;
+};
+
+const CACHE_MAX_ENTRIES = 512;
+const cache = new Map<string, CacheEntry>();
+let accessSeq = 0;
+
+function cloneKvValue(value: KvValue): KvValue {
+  return typeof value === "string" ? value : new Uint8Array(value);
+}
+
+function touchCacheEntry(key: string, entry: CacheEntry): KvValue {
+  entry.hits += 1;
+  entry.lastAccessSeq = ++accessSeq;
+  cache.set(key, entry);
+  return cloneKvValue(entry.value);
+}
+
+function evictLeastAccessedIfNeeded(): void {
+  if (cache.size <= CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  let evictKey: string | null = null;
+  let evictEntry: CacheEntry | null = null;
+  for (const [key, entry] of cache) {
+    if (
+      evictEntry === null ||
+      entry.hits < evictEntry.hits ||
+      (entry.hits === evictEntry.hits &&
+        entry.lastAccessSeq < evictEntry.lastAccessSeq)
+    ) {
+      evictKey = key;
+      evictEntry = entry;
+    }
+  }
+
+  if (evictKey !== null) {
+    cache.delete(evictKey);
+  }
+}
+
+function setCacheValue(key: string, value: KvValue): void {
+  const existing = cache.get(key);
+  cache.set(key, {
+    value: cloneKvValue(value),
+    hits: existing?.hits ?? 1,
+    lastAccessSeq: ++accessSeq,
+  });
+  evictLeastAccessedIfNeeded();
+}
+
 export function kvGet(key: string): KvValue | null {
+  const cached = cache.get(key);
+  if (cached) {
+    return touchCacheEntry(key, cached);
+  }
+
   const row = db()
     .prepare(`SELECT value FROM ${NATIVE_KV_TABLE} WHERE key = ? LIMIT 1`)
     .get(key) as { value: KvValue } | undefined;
-  return row?.value ?? null;
+  if (!row) {
+    return null;
+  }
+
+  setCacheValue(key, row.value);
+  return cloneKvValue(row.value);
 }
 
 export function kvSet(key: string, value: KvValue): void {
@@ -23,9 +88,14 @@ export function kvSet(key: string, value: KvValue): void {
          updated_at = unixepoch()`
     )
     .run(key, value);
+  setCacheValue(key, value);
 }
 
 export function kvHas(key: string): boolean {
+  if (cache.has(key)) {
+    return true;
+  }
+
   return Boolean(
     db()
       .prepare(`SELECT 1 FROM ${NATIVE_KV_TABLE} WHERE key = ? LIMIT 1`)
@@ -37,11 +107,16 @@ export function kvDelete(key: string): boolean {
   const result = db()
     .prepare(`DELETE FROM ${NATIVE_KV_TABLE} WHERE key = ?`)
     .run(key) as { changes: number | bigint };
-  return Number(result.changes) > 0;
+  const deleted = Number(result.changes) > 0;
+  if (deleted) {
+    cache.delete(key);
+  }
+  return deleted;
 }
 
 export function kvClear(): void {
   db().exec(`DELETE FROM ${NATIVE_KV_TABLE}`);
+  cache.clear();
 }
 
 export function kvSetJson<T>(key: string, value: T): void {
