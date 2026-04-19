@@ -3,6 +3,8 @@ import { registerCallHandler } from "../calls";
 import { fireNativeCall } from "../channel";
 import { AudioPlayInfo } from "../Player";
 
+import * as kv from "../../storage";
+
 registerCallHandler<[string, AudioPlayInfo], void>(
   "audioplayer.load",
   async (id, playInfo) => {
@@ -153,10 +155,12 @@ registerCallHandler<[string, { device: AudioDeviceInit; type: string }], void>(
   "audioplayer.init",
   async (kind, { device }) => {
     if (kind === "device") {
-      // TODO: Do we store this on native side?
-      await (player.audioContext as unknown as HTMLAudioElement).setSinkId(
-        device.deviceId
-      );
+      await Promise.allSettled([
+        kv.set("audioplayer.currentAudioOutputDevice", device.deviceId),
+        (player.audioContext as unknown as HTMLAudioElement).setSinkId(
+          device.deviceId
+        ),
+      ]);
     }
   }
 );
@@ -187,7 +191,10 @@ registerCallHandler<[string], void>(
         [
           {
             devices: filteredDevices.map((device) => {
-              if (device.deviceId === player.audio.sinkId) {
+              if (
+                device.deviceId ===
+                (player.audioContext as unknown as HTMLAudioElement).sinkId
+              ) {
                 currentAudioOutputDeviceInfo = device;
               } else if (device.deviceId === "default") {
                 defaultDeviceInfo = device;

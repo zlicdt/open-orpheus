@@ -2,7 +2,19 @@ import { ipcRenderer } from "electron";
 import { fireNativeCall } from "./channel";
 import Player, { AudioPlayerState } from "./Player";
 
+import { get as kvGet } from "../storage";
+
 export const player = new Player();
+
+kvGet("audioplayer.currentAudioOutputDevice").then((deviceId) => {
+  if (deviceId && typeof deviceId === "string") {
+    (player.audioContext as unknown as HTMLAudioElement)
+      .setSinkId(deviceId)
+      .catch((e) => {
+        console.error("Failed to set audio output device:", e);
+      });
+  }
+});
 
 let buffering = false;
 let bufferProgress = 0;

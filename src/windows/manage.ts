@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import * as kv from "../storage";
+
 contextBridge.exposeInMainWorld("orpheus", {
   getWebPackCommitHash: () => ipcRenderer.invoke("manage.getWebPackCommitHash"),
 
@@ -9,3 +11,5 @@ contextBridge.exposeInMainWorld("orpheus", {
 
   openGpuInfo: () => ipcRenderer.invoke("manage.openGpuInfo"),
 });
+
+contextBridge.exposeInMainWorld("kv", kv);

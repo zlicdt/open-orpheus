@@ -197,9 +197,12 @@ app.on("ready", async () => {
 
     await Promise.all([
       import("./main/channel"),
+      // Make sure we handle KV storage IPC calls
+      import("./main/storage"),
       prepareDeviceId(),
       packManager.getPack<WebPack>("web").readPack(),
       import("./main/windows/desktop-lyrics").then((m) => {
+        // Create desktop lyrics window
         m.default();
       }),
     ]);
