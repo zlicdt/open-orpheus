@@ -31,11 +31,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install flatpak-node-generator
-        run: pip3 install --user flatpak-node-generator
-
-      - name: Install flatpak-cargo-generator
-        run: pip3 install --user flatpak-cargo-generator
+      - name: Install flatpak-node-generator and flatpak-cargo-generator
+        run: |
+          pip3 install --user \
+            "git+https://github.com/flatpak/flatpak-builder-tools.git@34ecf07ef4843f36b3078637ca13f1dbb1c2963a#subdirectory=node" \
+            "git+https://github.com/flatpak/flatpak-builder-tools.git@34ecf07ef4843f36b3078637ca13f1dbb1c2963a#subdirectory=cargo"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Generate Flatpak builder manifest
         run: node --experimental-strip-types scripts/build-flatpak-builder.mts
