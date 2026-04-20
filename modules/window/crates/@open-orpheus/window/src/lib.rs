@@ -7,5 +7,8 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod linux;
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 // Use #[neon::main] to add additional behavior at module loading time.
 // See more at: https://docs.rs/neon/latest/neon/attr.main.html
