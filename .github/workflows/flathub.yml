@@ -1,0 +1,93 @@
+name: Publish to Flathub
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  FLATHUB_REPO: YUCLing/open-orpheus-flathub
+  FLATHUB_BRANCH: new-pr
+
+jobs:
+  build-manifest:
+    name: Generate Flatpak builder manifest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install flatpak-node-generator
+        run: pip3 install --user flatpak-node-generator
+
+      - name: Install flatpak-cargo-generator
+        run: pip3 install --user flatpak-cargo-generator
+
+      - name: Generate Flatpak builder manifest
+        run: node --experimental-strip-types scripts/build-flatpak-builder.mts
+
+      - name: Upload manifest artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-builder
+          path: out/make/flatpak-builder/
+
+  publish:
+    name: Push manifest to Flathub repository
+    needs: build-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download manifest artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: flatpak-builder
+          path: flatpak-builder
+
+      - name: Checkout Flathub repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.FLATHUB_REPO }}
+          ref: ${{ env.FLATHUB_BRANCH }}
+          token: ${{ secrets.FLATHUB_GITHUB_TOKEN }}
+          path: flathub-repo
+
+      - name: Copy generated files into Flathub repo
+        run: |
+          cp -r flatpak-builder/. flathub-repo/
+
+      - name: Get version from package.json
+        id: pkg
+        run: |
+          VERSION=$(node -p "require('./flatpak-builder/package.json').version" 2>/dev/null || \
+            grep -m1 '"version"' flatpak-builder/../package.json | sed 's/.*: *"\(.*\)".*/\1/' || true)
+          # Fall back: read from the downloaded artifact context via the tag name
+          if [ -z "$VERSION" ] && [ -n "$GITHUB_REF_NAME" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push to Flathub repository
+        working-directory: flathub-repo
+        run: |
+          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${{ github.repository_owner }}@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Open Orpheus v${{ steps.pkg.outputs.version }}"
+          git push origin ${{ env.FLATHUB_BRANCH }}
