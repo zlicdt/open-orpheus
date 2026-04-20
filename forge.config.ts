@@ -19,6 +19,14 @@ const config: ForgeConfig = {
       unpack: "**/*.{so*,dylib,dll}",
     },
     derefSymlinks: true, // TODO: Remove in Electron Forge 8
+
+    // In offline environments (e.g. flatpak sandbox), SHASUMS256.txt cannot be
+    // downloaded from GitHub. The electron zip is already verified by sha256 in
+    // generated-node-sources.json, so it's safe to skip checksum verification.
+    ...(process.env.ELECTRON_OFFLINE_BUILD
+      ? { download: { unsafelyDisableChecksums: true } }
+      : {}),
+
     // Override Vite Plugin's preferences, and with our preferences
     ignore: (file: string) => {
       if (!file) return;

@@ -1,9 +1,9 @@
 declare module "electron-installer-redhat" {
-  export class Installer {
+  import { ElectronInstaller } from "electron-installer-common";
+
+  export class Installer extends ElectronInstaller {
     get contentFunctions(): string[];
     get specPath(): string;
-    get stagingDir(): string;
-    get options(): Record<string, unknown>;
 
     constructor(options: object);
 
