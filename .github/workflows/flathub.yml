@@ -33,9 +33,23 @@ jobs:
 
       - name: Install flatpak-node-generator and flatpak-cargo-generator
         run: |
-          pip3 install --user \
-            "git+https://github.com/flatpak/flatpak-builder-tools.git@34ecf07ef4843f36b3078637ca13f1dbb1c2963a#subdirectory=node" \
-            "git+https://github.com/flatpak/flatpak-builder-tools.git@34ecf07ef4843f36b3078637ca13f1dbb1c2963a#subdirectory=cargo"
+          COMMIT=34ecf07ef4843f36b3078637ca13f1dbb1c2963a
+          TOOLS_DIR=/tmp/flatpak-builder-tools
+          git clone --filter=blob:none https://github.com/flatpak/flatpak-builder-tools.git "$TOOLS_DIR"
+          git -C "$TOOLS_DIR" checkout "$COMMIT"
+
+          # node generator: installs a proper CLI entry point
+          pip3 install --user "$TOOLS_DIR/node"
+
+          # cargo generator: install via poetry as documented, then create a launcher
+          pip3 install --user poetry
+          poetry -C "$TOOLS_DIR/cargo" install --no-interaction
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/flatpak-cargo-generator" << EOF
+          #!/bin/sh
+          exec poetry -C "$TOOLS_DIR/cargo" run python3 "$TOOLS_DIR/cargo/flatpak-cargo-generator.py" "\$@"
+          EOF
+          chmod +x "$HOME/.local/bin/flatpak-cargo-generator"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Generate Flatpak builder manifest
