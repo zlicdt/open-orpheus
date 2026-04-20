@@ -37,6 +37,14 @@ jobs:
         id: pkg
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Determine source tag and compute SHA256
+        id: source
+        run: |
+          TAG="v${{ steps.pkg.outputs.version }}"
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          SHA256=$(curl -sL "$URL" | sha256sum | cut -d' ' -f1)
+          echo "flatpak_source=${URL}+${SHA256}" >> "$GITHUB_OUTPUT"
+
       - name: Install flatpak-node-generator and flatpak-cargo-generator
         run: |
           COMMIT=34ecf07ef4843f36b3078637ca13f1dbb1c2963a
@@ -59,6 +67,8 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Generate Flatpak builder manifest
+        env:
+          FLATPAK_SOURCE: ${{ steps.source.outputs.flatpak_source }}
         run: node --experimental-strip-types scripts/build-flatpak-builder.mts
 
       - name: Upload manifest artifacts

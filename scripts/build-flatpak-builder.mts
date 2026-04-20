@@ -125,44 +125,72 @@ await execFile("flatpak-cargo-generator", [
 ]);
 console.log("flatpak-cargo-generator done.");
 
-// --- Step 4: Create project source tarball ---
+// --- Step 4: Create project source tarball (or use a remote URL) ---
 const { name: pkgName, version: pkgVersion } = pkg as {
   name: string;
   version: string;
 };
 const sourceTarball = `${pkgName}-${pkgVersion}.tar.gz`;
-const sourceTarballPath = resolve(outDir, sourceTarball);
-console.log(`Creating project source tarball: ${sourceTarball}`);
-// Use git ls-files to get all tracked + untracked-but-not-ignored files
-// (reads current disk state, so uncommitted edits are included)
-const { stdout: nullSeparatedFiles } = await execFile(
-  "git",
-  ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-  { cwd: projectRoot, maxBuffer: 10 * 1024 * 1024 }
-);
-await new Promise<void>((res, rej) => {
-  const tar = spawn(
-    "tar",
-    [
-      "czf",
-      sourceTarballPath,
-      "--null",
-      "--no-recursion",
-      "--transform",
-      `s,^,${pkgName}-${pkgVersion}/,`,
-      "-C",
-      projectRoot,
-      "-T",
-      "-",
-    ],
-    { cwd: projectRoot }
+
+// Set FLATPAK_SOURCE to a remote archive URL and its sha256 checksum separated
+// by '+' (e.g. https://github.com/.../v0.5.0.tar.gz+abc123...) to skip local
+// tarball creation and embed the remote URL directly in the manifest.
+const flatpakSource = process.env.FLATPAK_SOURCE;
+const flatpakSourceMatch = flatpakSource?.match(/^(.+)\+([0-9a-fA-F]{64})$/);
+
+if (flatpakSource && !flatpakSourceMatch) {
+  throw new Error('FLATPAK_SOURCE must be in the format "url+sha256hex".');
+}
+
+let projectSource: Record<string, unknown>;
+if (flatpakSourceMatch) {
+  const [, sourceUrl, sourceSha256] = flatpakSourceMatch;
+  console.log(`Using remote source: ${sourceUrl}`);
+  projectSource = {
+    type: "archive",
+    url: sourceUrl,
+    sha256: sourceSha256,
+    "strip-components": 1,
+  };
+} else {
+  const sourceTarballPath = resolve(outDir, sourceTarball);
+  console.log(`Creating project source tarball: ${sourceTarball}`);
+  // Use git ls-files to get all tracked + untracked-but-not-ignored files
+  // (reads current disk state, so uncommitted edits are included)
+  const { stdout: nullSeparatedFiles } = await execFile(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { cwd: projectRoot, maxBuffer: 10 * 1024 * 1024 }
   );
-  tar.on("error", rej);
-  tar.on("close", (code) =>
-    code === 0 ? res() : rej(new Error(`tar exited with code ${code}`))
-  );
-  tar.stdin.end(nullSeparatedFiles);
-});
+  await new Promise<void>((res, rej) => {
+    const tar = spawn(
+      "tar",
+      [
+        "czf",
+        sourceTarballPath,
+        "--null",
+        "--no-recursion",
+        "--transform",
+        `s,^,${pkgName}-${pkgVersion}/,`,
+        "-C",
+        projectRoot,
+        "-T",
+        "-",
+      ],
+      { cwd: projectRoot }
+    );
+    tar.on("error", rej);
+    tar.on("close", (code) =>
+      code === 0 ? res() : rej(new Error(`tar exited with code ${code}`))
+    );
+    tar.stdin.end(nullSeparatedFiles);
+  });
+  projectSource = {
+    type: "archive",
+    path: sourceTarball,
+    "strip-components": 1,
+  };
+}
 
 // --- Step 5: Generate Flatpak builder YAML manifest ---
 type InstallerOptions = {
@@ -230,11 +258,7 @@ const appModule = {
       "dest-filename": pnpmTarballName,
     },
     "generated-cargo-sources.json",
-    {
-      type: "archive",
-      path: sourceTarball,
-      "strip-components": 1,
-    },
+    projectSource,
     {
       type: "dir",
       path: "scaffolding",
