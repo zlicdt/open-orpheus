@@ -16,6 +16,7 @@
 {#if orpheus.platform === "linux"}
   {#await clickBehaviorPromise then value}
     <RadioGroup.Root
+      class="mt-2"
       bind:value={
         () => (value || "depends-on-main-window") as TrayClickBehavior,
         (v) => {

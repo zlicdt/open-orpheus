@@ -79,14 +79,16 @@
       </Sidebar.Group>
     </Sidebar.Content>
   </Sidebar.Root>
-  <main class="h-screen overflow-y-auto p-4">
-    {#each items as item, i (item.id)}
-      <div class="my-4" class:mt-0={i === 0} id={item.id}>
-        <item.component />
-      </div>
-      {#if i < items.length - 1}
-        <hr class="my-6 border-t-2 border-gray-200/50" />
-      {/if}
-    {/each}
+  <main class="h-screen flex-1 overflow-y-auto">
+    <div class="w-full p-4 xl:mx-auto xl:w-4xl">
+      {#each items as item, i (item.id)}
+        <div class="my-4" class:mt-0={i === 0} id={item.id}>
+          <item.component />
+        </div>
+        {#if i < items.length - 1}
+          <hr class="my-6 border-t-2 border-gray-200/50" />
+        {/if}
+      {/each}
+    </div>
   </main>
 </Sidebar.Provider>
