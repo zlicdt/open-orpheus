@@ -101,6 +101,7 @@ jobs:
 
       - name: Copy generated files into Flathub repo
         run: |
+          find flathub-repo -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -r flatpak-builder/. flathub-repo/
 
       - name: Commit and push to Flathub repository
