@@ -9,6 +9,7 @@
     <name>YUCLing</name>
   </developer>
   <url type="homepage">https://github.com/YUCLing/open-orpheus</url>
+  <url type="vcs-browser">https://github.com/YUCLing/open-orpheus</url>
   
   <metadata_license>CC-BY-4.0</metadata_license>
   <project_license>MIT</project_license>
