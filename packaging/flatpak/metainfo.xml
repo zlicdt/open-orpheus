@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.yucling.open_orpheus</id>
+  <id>io.github.yucling.open-orpheus</id>
   
   <name>Open Orpheus</name>
   <summary>An open-source implementation of Netease Cloud Music&apos;s Orpheus browser host.</summary>
