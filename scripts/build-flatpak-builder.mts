@@ -222,6 +222,9 @@ const appModule = {
     // Create the /app/bin symlink
     "install -d /app/bin",
     `ln -sf /app/lib/${appIdentifier}/${opts.bin} /app/bin/${opts.bin}`,
+
+    // Install AppStream metainfo
+    `install -Dm644 packaging/flatpak/metainfo.xml /app/share/metainfo/${opts.id}.metainfo.xml`,
   ],
   sources: [
     "generated-node-sources.json",

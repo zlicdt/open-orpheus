@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.yucling.open_orpheus</id>
+  
+  <name>Open Orpheus</name>
+  <summary>An open-source implementation of Netease Cloud Music&apos;s Orpheus browser host.</summary>
+  
+  <metadata_license>CC-BY-4.0</metadata_license>
+  <project_license>MIT</project_license>
+  
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+    <control>tablet</control>
+  </supports>
+  
+  <description>
+    <p>
+      Open Orpheus is an open-source implementation of Netease Cloud Music browser host, it allows the user to run Netease Cloud Music official client&apos;s web resources on Linux, with the best compatibility provided by this host.
+    </p>
+  </description>
+  
+  <launchable type="desktop-id">io.github.yucling.open-orpheus.desktop</launchable>
+</component>
