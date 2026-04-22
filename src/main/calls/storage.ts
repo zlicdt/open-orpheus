@@ -173,6 +173,17 @@ registerCallHandler<[string, { id: string; path: string }[], string], void>(
   }
 );
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type DownloadScannerItem = {
+  comment: string; // comment added by addid3
+  creation_time: number; // timestamp
+  last_accessed: number;
+  last_modified: number;
+  path: string; // path relative to download dir
+  size: number;
+};
+// Reply with `storage.ondownloadscanner`
+// - array of `DownloadScannerItem`
 registerCallHandler<[string, boolean, string, number, string[]], void>(
   "storage.downloadscanner",
   (event) => {
@@ -327,4 +338,25 @@ registerCallHandler<[string, "abs" | "rel", "", string], void>(
         event.sender.send("channel.call", "storage.onlistfile", taskId, 1, []);
       });
   }
+);
+
+type AddId3Request = {
+  encrypt: boolean;
+  image_rel_path: string;
+  media_rel_path: string;
+  talb: string; // Track album
+  tit2: string; // Track title
+  tpe1: string; // Track artists
+  tpos: string; // Track number? "01"
+  trck: string; // Track number? "1"
+};
+// `mediaInfo` is saved to comment, with encryption
+// Reply with `storage.onaddid3done`
+// - taskId
+// - code? 1
+// - final media path relative to download path
+registerCallHandler<[string, string, string, string, AddId3Request], void>(
+  "storage.addid3",
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {}
 );
