@@ -111,7 +111,7 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
         let buf!: Buffer<ArrayBuffer>;
         const doFetch = async () => {
           const res = await got(wasmUrl, { throwHttpErrors: false });
-          if (!res.ok) {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
             throw new LoadError(
               `Failed to fetch wasm from url: ${res.statusMessage}`,
               res.statusCode
@@ -183,7 +183,7 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
       }
       const cached = await urlCacheManager.getOrFetch(url, async () => {
         const response = await got(url, { throwHttpErrors: false });
-        if (!response.ok) {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
           throw new LoadError(
             `Failed to fetch resource: ${response.statusMessage}`,
             response.statusCode
