@@ -20,9 +20,10 @@ import { registerGlobalShortcut, unregisterGlobalShortcut } from "../shortcuts";
 import { kvGet } from "../kv";
 
 function shouldApplyScaleFactor() {
-  // TODO: Confirm macOS desired behavior, Windows and Linux is already tested to be correct
   return (
-    os.platform() === "win32" || (os.platform() === "linux" && !isWayland())
+    os.platform() === "win32" ||
+    os.platform() === "darwin" ||
+    (os.platform() === "linux" && !isWayland())
   );
 }
 
