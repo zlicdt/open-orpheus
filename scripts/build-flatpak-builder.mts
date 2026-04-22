@@ -137,7 +137,6 @@ if (flatpakSourceMatch) {
     type: "archive",
     url: sourceUrl,
     sha256: sourceSha256,
-    "strip-components": 1,
   };
 } else {
   const sourceTarballPath = resolve(outDir, sourceTarball);
@@ -175,7 +174,6 @@ if (flatpakSourceMatch) {
   projectSource = {
     type: "archive",
     path: sourceTarball,
-    "strip-components": 1,
   };
 }
 
