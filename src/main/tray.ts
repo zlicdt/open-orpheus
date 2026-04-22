@@ -29,7 +29,7 @@ export function setTooltip(newTooltip: string) {
   }
 }
 
-export function setMenu(newMenu: Menu) {
+export function setMenu(newMenu: Menu | null) {
   menu = newMenu;
   if (trayIcon) {
     trayIcon.setContextMenu(newMenu);

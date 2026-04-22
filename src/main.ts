@@ -35,6 +35,7 @@ import {
   quitting,
   markQuitting,
 } from "./main/lifecycle";
+import { stringifyError } from "./util";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -219,7 +220,7 @@ app.on("ready", async () => {
       dialog.showErrorBox(
         "Initialization Failed",
         "An error occurred during application initialization. Open Orpheus will now exit.\n\nDetails:\n" +
-          (error.stack || error.message || error)
+          stringifyError(error)
       );
     }
     app.exit(1);

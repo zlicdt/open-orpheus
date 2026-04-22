@@ -7,7 +7,7 @@ on:
 
 jobs:
   lint-node:
-    name: ESLint & Prettier
+    name: JS/TS Lint & Prettier
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,13 @@ jobs:
         run: PREFER_SCRIPT=prepack pnpm build:modules
 
       - name: Run ESLint
-        run: pnpm lint
+        run: pnpm lint:eslint
+
+      - name: Run TypeScript type check (root)
+        run: pnpm lint:types:root
+
+      - name: Run Svelte type check (gui)
+        run: pnpm lint:types:gui
 
       - name: Check Prettier formatting
         run: pnpm prettier --check .

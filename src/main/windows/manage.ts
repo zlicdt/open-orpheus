@@ -41,9 +41,9 @@ export default function showManageWindow() {
 
   manageWnd.webContents.ipc.handle("manage.getCacheStats", async () => {
     const [playCacheInfo, httpStats, lyrics, wasm] = await Promise.all([
-      playCacheManager.getInfo(),
-      urlCacheManager.getStats(),
-      lyricCacheManager.getStats(),
+      playCacheManager?.getInfo(),
+      urlCacheManager?.getStats(),
+      lyricCacheManager?.getStats(),
       (async () => {
         try {
           const entries = await readdir(wasmDir, { withFileTypes: true });
@@ -68,9 +68,9 @@ export default function showManageWindow() {
 
     return {
       play: {
-        entryCount: (await playCacheManager.queryCacheTracks()).length,
+        entryCount: (await playCacheManager?.queryCacheTracks())?.length || 0,
         sizeBytes: Math.round(
-          playCacheInfo.currentCachedSize * 1024 * 1024 * 1024
+          (playCacheInfo?.currentCachedSize || 0) * 1024 * 1024 * 1024
         ),
       },
       http: httpStats,
@@ -83,9 +83,9 @@ export default function showManageWindow() {
     "manage.clearResources",
     async (_, category: "http" | "lyrics" | "wasm") => {
       if (category === "http") {
-        await urlCacheManager.clear();
+        await urlCacheManager?.clear();
       } else if (category === "lyrics") {
-        await lyricCacheManager.clear();
+        await lyricCacheManager?.clear();
       } else if (category === "wasm") {
         await rm(wasmDir, { recursive: true, force: true });
       }

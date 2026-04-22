@@ -77,6 +77,8 @@ export default function createDesktopLyricsWindow() {
   desktopLyricsWindow.webContents.ipc.handle(
     "desktopLyrics.changeOrientation",
     () => {
+      if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
+
       const sz = desktopLyricsWindow.getSize();
       desktopLyricsWindow.setSize(sz[1], sz[0]);
     }

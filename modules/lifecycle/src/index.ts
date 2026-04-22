@@ -63,7 +63,11 @@ export function registerFinalizer<T>(
   callback: (heldValue: T) => void
 ): FinalizerToken {
   const token = {};
-  const finalizer = { heldValue, token, callback };
+  const finalizer = {
+    heldValue,
+    token,
+    callback,
+  } as FinalizationRegistryHandler;
   objectFinalizers.push(finalizer);
   finalizationRegistry.register(target, finalizer, finalizer);
   return token;

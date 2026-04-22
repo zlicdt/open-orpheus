@@ -16,7 +16,7 @@ export default class CallDispatcher {
     cmd: string,
     handler: HandlerFunction<Args, Return>
   ) {
-    this.handlers.set(cmd, handler as HandlerFunction);
+    this.handlers.set(cmd, handler as unknown as HandlerFunction);
   }
 
   registerHandlers(handlers: { [cmd: string]: HandlerFunction }) {

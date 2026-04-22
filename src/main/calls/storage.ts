@@ -22,6 +22,7 @@ import createCacheManager, {
   lyricCacheManager,
   playCacheManager,
 } from "../cache";
+import { stringifyError } from "../../util";
 
 registerCallHandler<[string, string, string], [string, string]>(
   "storage.init",
@@ -81,7 +82,7 @@ registerCallHandler<[string, string], void>(
         ...execResult
       );
     } catch (error) {
-      console.error(`Error executing SQL: ${error.message}`);
+      console.error(`Error executing SQL: ${stringifyError(error)}`);
       event.sender.send(
         "channel.call",
         "storage.onexecsqldone",
@@ -106,7 +107,9 @@ registerCallHandler<[string, string], void>(
         ...execResult
       );
     } catch (error) {
-      console.error(`Error executing SQL transaction: ${error.message}`);
+      console.error(
+        `Error executing SQL transaction: ${stringifyError(error)}`
+      );
       event.sender.send(
         "channel.call",
         "storage.onexecsqldone",
@@ -147,7 +150,7 @@ registerCallHandler<
         "storage.onsavetofiledone",
         taskId,
         -1,
-        error.message
+        stringifyError(error)
       );
     }
   }
@@ -179,6 +182,7 @@ registerCallHandler<[string, boolean, string, number, string[]], void>(
 );
 
 registerCallHandler<[], void>("storage.queryCacheTracks", async (event) => {
+  if (!playCacheManager) return;
   const wnd = event.sender;
   if (!wnd) return;
   const tracks = await playCacheManager.queryCacheTracks();
@@ -196,8 +200,9 @@ registerCallHandler<
   ],
   [CacheTrackMeta | null]
 >("storage.queryNewCacheTrack", async (event, track) => {
+  if (!playCacheManager) return [null];
   const wnd = event.sender;
-  if (!wnd) return;
+  if (!wnd) return [null];
   const cachedTrack = await playCacheManager.getCachedTrack(track.trackId);
   if (
     !cachedTrack ||
@@ -211,16 +216,20 @@ registerCallHandler<
 registerCallHandler<[PlayCacheConfig], void>(
   "storage.setPlayCacheConfig",
   (event, config) => {
-    playCacheManager.setConfig(config);
+    playCacheManager?.setConfig(config);
   }
 );
 
-registerCallHandler<[], [PlayCacheInfo]>("storage.playCacheInfo", async () => {
-  const info = await playCacheManager.getInfo();
-  return [info];
-});
+registerCallHandler<[], [PlayCacheInfo | undefined]>(
+  "storage.playCacheInfo",
+  async () => {
+    const info = await playCacheManager?.getInfo();
+    return [info];
+  }
+);
 
 registerCallHandler<[""], [boolean]>("storage.clearCache", async () => {
+  if (!playCacheManager) return [false];
   try {
     await playCacheManager.clearAll();
     return [true];
@@ -234,10 +243,10 @@ registerCallHandler<[string], void>(
   async (event, songId) => {
     let content = "";
     try {
-      content = (await lyricCacheManager.get(songId)) ?? "";
+      content = (await lyricCacheManager?.get(songId)) ?? "";
     } catch (error) {
       console.error(
-        `Error reading temp file for songId ${songId}: ${error.message}`
+        `Error reading temp file for songId ${songId}: ${stringifyError(error)}`
       );
     }
     event.sender.send(
@@ -253,6 +262,8 @@ registerCallHandler<[string], void>(
 registerCallHandler<[string, string, string], void>(
   "storage.updatetemp",
   async (event, songId, content, type) => {
+    if (!lyricCacheManager) return;
+
     if (type !== "text/plain") {
       console.error(`Unsupported temp file type: ${type}`);
       return;
@@ -262,7 +273,7 @@ registerCallHandler<[string, string, string], void>(
       await lyricCacheManager.set(songId, content);
     } catch (error) {
       console.error(
-        `Error writing temp file for songId ${songId}: ${error.message}`
+        `Error writing temp file for songId ${songId}: ${stringifyError(error)}`
       );
     }
   }

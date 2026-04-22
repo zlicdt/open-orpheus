@@ -10,7 +10,7 @@ import { addEventListener as addKVEventListener, KvChangeEvent } from "../kv";
 import { mainWindow } from "../window";
 
 if (os.platform() === "linux") {
-  addKVEventListener("change", (event: KvChangeEvent) => {
+  addKVEventListener("change", ((event: KvChangeEvent) => {
     const { key, current: value } = event.detail;
     if (key === "tray.clickBehavior") {
       if (value === "with-native-menu") {
@@ -19,7 +19,7 @@ if (os.platform() === "linux") {
           new MenuItem({
             label: "显示菜单",
             click: () => {
-              mainWindow.webContents.send(
+              mainWindow?.webContents.send(
                 "channel.call",
                 "trayicon.onrightclick"
               );
@@ -31,7 +31,7 @@ if (os.platform() === "linux") {
         setMenu(null);
       }
     }
-  });
+  }) as EventListener);
 }
 
 registerCallHandler<[string], void>(

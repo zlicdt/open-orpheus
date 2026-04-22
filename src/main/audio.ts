@@ -5,22 +5,23 @@ import { ipcMain, Protocol } from "electron";
 
 import AudioStreamer from "./audio/streamer";
 
-import type { AudioPlayInfo } from "src/preload/Player";
+import type { AudioPlayInfo } from "../preload/Player";
 import { mainWindow } from "./window";
 import { playCacheManager } from "./cache";
 
 const audioStreamer = new AudioStreamer();
 
-audioStreamer.addEventListener("progress", (e: CustomEvent<number>) => {
-  mainWindow.webContents.send("audio.onProgress", e.detail);
-});
+audioStreamer.addEventListener("progress", ((e: CustomEvent<number>) => {
+  mainWindow?.webContents.send("audio.onProgress", e.detail);
+}) as EventListener);
 
 audioStreamer.addEventListener("complete", () => {
   const sb = audioStreamer.buffer;
   const playInfo = audioStreamer.audioPlayInfo;
+  if (!sb || !playInfo) return;
 
   playCacheManager
-    .cacheTrack(sb.songId, sb.buffer, {
+    ?.cacheTrack(sb.songId, sb.buffer, {
       md5: playInfo.md5,
       bitrate: playInfo.bitrate,
       playInfoStr: playInfo.playInfoStr,
@@ -66,5 +67,6 @@ export default function registerAudioStreamerScheme(protocol: Protocol) {
         return audioStreamer.handleRequest(songId, request);
       }
     }
+    return new Response("Not Found", { status: 404 });
   });
 }

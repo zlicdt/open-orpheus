@@ -29,7 +29,7 @@ const config: ForgeConfig = {
 
     // Override Vite Plugin's preferences, and with our preferences
     ignore: (file: string) => {
-      if (!file) return;
+      if (!file) return true;
 
       return (
         file.startsWith("/node_modules/.") ||

@@ -12,7 +12,7 @@ if (location.search.includes("route=miniProgram")) {
         Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
           get() {
             const contentDocument =
-              originalContentDocumentDescriptor.get.call(this);
+              originalContentDocumentDescriptor.get?.call(this);
             if (!contentDocument) {
               // Create a fake contentDocument to prevent load-fail
               const fakeDocument = { body: { textContent: "N" } };

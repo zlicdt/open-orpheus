@@ -77,7 +77,7 @@ app.on("browser-window-created", (event, wnd) => {
     wnd.on("show", () => {
       const props = windowProperties.get(wnd.id);
       if (!props) return;
-      props.waylandId = getLastCreatedWindowId();
+      props.waylandId = getLastCreatedWindowId() || undefined;
     });
 
     wnd.on("hide", () => {
@@ -111,7 +111,7 @@ export function getWindowId(wnd: BrowserWindow): string | undefined {
 export function getWindowById(id: string): BrowserWindow | undefined {
   for (const [wndId, props] of windowProperties.entries()) {
     if (props.id === id) {
-      return BrowserWindow.fromId(wndId);
+      return BrowserWindow.fromId(wndId) || undefined;
     }
   }
   return undefined;
@@ -147,12 +147,17 @@ export function getMenus(wnd: BrowserWindow): Map<number, AppMenu> {
 }
 
 export function setWindowProp<T>(wnd: BrowserWindow, prop: string, value: T) {
-  const customProps = windowProperties.get(wnd.id).customProps;
+  const customProps = windowProperties.get(wnd.id)?.customProps;
+  if (!customProps) return; // Should not happen since we initialize it when creating the window
   customProps[prop] = value;
 }
 
-export function getWindowProp<T>(wnd: BrowserWindow, prop: string): T {
-  const customProps = windowProperties.get(wnd.id).customProps;
+export function getWindowProp<T>(
+  wnd: BrowserWindow,
+  prop: string
+): T | undefined {
+  const customProps = windowProperties.get(wnd.id)?.customProps;
+  if (!customProps) return undefined;
   return customProps[prop] as T;
 }
 

@@ -172,8 +172,10 @@ navigator.mediaSession.setActionHandler("previoustrack", () => {
 navigator.mediaSession.setActionHandler("stop", () => {
   fireNativeCall("winhelper.onHotkey", "stop", true);
 });
-["play", "pause"].forEach((action: MediaSessionAction) => {
-  navigator.mediaSession.setActionHandler(action, () => {
-    fireNativeCall("winhelper.onHotkey", "play_pause_3", true);
-  });
-});
+(["play", "pause"] as MediaSessionAction[]).forEach(
+  (action: MediaSessionAction) => {
+    navigator.mediaSession.setActionHandler(action, () => {
+      fireNativeCall("winhelper.onHotkey", "play_pause_3", true);
+    });
+  }
+);

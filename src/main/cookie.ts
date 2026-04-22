@@ -58,6 +58,7 @@ export function processSetCookie(
     firstArg,
     secondArg
   );
+  if (!requestUrl) return;
 
   for (const header of setCookieHeaders) {
     const parsedSetCookie = cookie.parseSetCookie(header);

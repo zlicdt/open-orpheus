@@ -35,7 +35,7 @@ export function patchById(items: AppMenuItem[], patch: AppMenuItem): boolean {
       items[i] = patch;
       return true;
     }
-    if (items[i].children && patchById(items[i].children, patch)) {
+    if (items[i].children && patchById(items[i].children!, patch)) {
       return true;
     }
   }

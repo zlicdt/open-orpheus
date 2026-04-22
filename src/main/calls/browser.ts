@@ -1,3 +1,4 @@
+import { stringifyError } from "../../util";
 import { registerCallHandler } from "../calls";
 import { getCookies, getFullCookies, removeCookie, setCookie } from "../cookie";
 
@@ -29,13 +30,13 @@ registerCallHandler<[string], [FullCookie[]]>(
     return [
       (await getFullCookies(url)).map((cookie) => ({
         Creation: Date.now(),
-        Domain: cookie.domain,
-        Expires: cookie.expirationDate?.valueOf(),
+        Domain: cookie.domain || "",
+        Expires: cookie.expirationDate?.valueOf() || Date.now(),
         HasExpires: cookie.expirationDate !== undefined ? 1 : 0,
         Httponly: cookie.httpOnly ? 1 : 0,
         LastAccess: Date.now(),
         Name: cookie.name,
-        Path: cookie.path,
+        Path: cookie.path || "/",
         Secure: cookie.secure ? 1 : 0,
         Url: `${cookie.secure ? "https:" : "http:"}//${cookie.domain}${cookie.path}`,
         Value: cookie.value,
@@ -62,7 +63,7 @@ registerCallHandler<[SetCookie], [boolean]>(
         path: cookie.Path,
       });
     } catch (error) {
-      console.error(`Error setting cookie: ${error.message}`);
+      console.error(`Error setting cookie: ${stringifyError(error)}`);
       return [false];
     }
     return [true];

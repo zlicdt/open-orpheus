@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DownloadPackageProgress } from "src/main/pack";
+import type { DownloadPackageProgress } from "../main/pack";
 
 contextBridge.exposeInMainWorld(
   "downloadPackage",

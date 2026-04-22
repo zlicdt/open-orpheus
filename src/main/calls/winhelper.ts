@@ -368,6 +368,7 @@ registerCallHandler<MenuRequest, void>(
         return;
       }
       if (itemId === "openOrpheus.showMainWindow") {
+        if (!mainWindow) return;
         mainWindow.show();
         mainWindow.focus();
         return;
