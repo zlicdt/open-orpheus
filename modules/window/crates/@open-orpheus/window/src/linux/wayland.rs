@@ -476,15 +476,15 @@ fn feed(
         buf.extend_from_slice(chunk);
         let mut msgs: Vec<(u32, u16, Vec<u8>)> = Vec::new();
         let mut off = 0;
-        loop {
-            let Some((oid, op, sz)) = parse_header(&buf[off..]) else {
+        while let Some((oid, op, sz)) = parse_header(&buf[off..]) {
+            let Some(end) = off.checked_add(sz) else {
                 break;
             };
-            if off + sz > buf.len() {
+            if end > buf.len() {
                 break;
             }
-            msgs.push((oid, op, buf[off..off + sz].to_vec()));
-            off += sz;
+            msgs.push((oid, op, buf[off..end].to_vec()));
+            off = end;
         }
         buf.drain(..off);
         let sync_lost = buf.len() > 4 << 20;
