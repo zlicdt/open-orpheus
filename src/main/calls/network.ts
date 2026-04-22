@@ -1,6 +1,8 @@
 import dns from "node:dns";
 
 import { stringifyCookie } from "cookie";
+import got, { RequestError } from "got";
+import type { Method } from "got";
 import { registerCallHandler } from "../calls";
 import { getCookies, processSetCookie } from "../cookie";
 import { deserialData } from "../crypto";
@@ -34,81 +36,90 @@ registerCallHandler<
   [NetworkFetchResponse]
 >("network.fetch", async (_, request): Promise<[NetworkFetchResponse]> => {
   const retryCount = request.retryCount ?? 1;
-  let lastError: unknown;
-  let lastAttempt = 0;
+  try {
+    const response = await got(request.url, {
+      method: request.method as Method,
+      headers: {
+        ...request.headers,
+        "User-Agent": session.defaultSession.getUserAgent(),
+        Cookie: stringifyCookie(await getCookies(request.url)),
+      },
+      body: request.body || undefined,
+      throwHttpErrors: false,
+      retry: {
+        limit: retryCount,
+        backoffLimit: 10000,
+      },
+      hooks: {
+        beforeRetry: [
+          () => {
+            globalFailCount++;
+          },
+        ],
+      },
+    });
 
-  for (let attempt = 0; attempt <= retryCount; attempt++) {
-    try {
-      // Exponential backoff: wait before retrying (skip on first attempt)
-      if (attempt > 0) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-
-      const response = await fetch(request.url, {
-        method: request.method,
-        headers: {
-          ...request.headers,
-          "User-Agent": session.defaultSession.getUserAgent(),
-          Cookie: stringifyCookie(await getCookies(request.url)),
-        },
-        body: request.body,
-      });
-
-      const headers: Record<string, string> = {};
-      const setCookieHeaders: string[] = [];
-      response.headers.forEach((value, key) => {
-        if (key.toLowerCase() === "set-cookie") {
-          setCookieHeaders.push(value);
-        }
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(response.headers)) {
+      if (Array.isArray(value)) {
+        headers[key] = value.join(", ");
+      } else if (value !== undefined) {
         headers[key] = value;
-      });
-
-      processSetCookie(request.url, setCookieHeaders);
-
-      let blob: string;
-      if (request.isDecrypt) {
-        const arrayBuffer = await response.arrayBuffer();
-        blob = deserialData(arrayBuffer);
-      } else {
-        blob = await response.text();
       }
-
-      globalSucCount++;
-
-      return [
-        {
-          code: 0,
-          blob,
-          error: "",
-          globalFailCount,
-          globalSucCount,
-          headers,
-          retryTimes: request.retryCount - attempt - 1,
-          status: response.status,
-        },
-      ];
-    } catch (error) {
-      globalFailCount++;
-      lastError = error;
-      lastAttempt = attempt;
-      // Continue to next retry attempt
     }
-  }
 
-  // All retries exhausted
-  return [
-    {
-      code: 28,
-      error:
-        (lastError as Error)?.message ||
-        (lastError ? String(lastError) : "Unknown error"),
-      status: 0,
-      blob: "",
-      headers: {},
-      retryTimes: request.retryCount - lastAttempt - 1,
-    },
-  ];
+    const setCookie = response.headers["set-cookie"];
+    const setCookieHeaders = Array.isArray(setCookie)
+      ? setCookie
+      : setCookie
+        ? [setCookie]
+        : [];
+    processSetCookie(request.url, setCookieHeaders);
+
+    const responseBody = Buffer.from(response.rawBody);
+    const blob = request.isDecrypt
+      ? deserialData(
+          responseBody.buffer.slice(
+            responseBody.byteOffset,
+            responseBody.byteOffset + responseBody.byteLength
+          )
+        )
+      : responseBody.toString();
+
+    globalSucCount++;
+
+    return [
+      {
+        code: 0,
+        blob,
+        error: "",
+        globalFailCount,
+        globalSucCount,
+        headers,
+        retryTimes: retryCount - response.retryCount - 1,
+        status: response.statusCode,
+      },
+    ];
+  } catch (error) {
+    globalFailCount++;
+    const retryTimes =
+      error instanceof RequestError && error.request
+        ? retryCount - error.request.retryCount - 1
+        : 0;
+
+    return [
+      {
+        code: 28,
+        error:
+          (error as Error)?.message ||
+          (error ? String(error) : "Unknown error"),
+        status: 0,
+        blob: "",
+        headers: {},
+        retryTimes,
+      },
+    ];
+  }
 });
 
 registerCallHandler<

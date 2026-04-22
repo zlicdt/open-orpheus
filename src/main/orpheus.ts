@@ -2,6 +2,7 @@ import { extname, resolve } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { Protocol } from "electron";
+import got from "got";
 import mime from "mime";
 import unzipper from "unzipper";
 
@@ -107,16 +108,16 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
         const cachedPath = resolve(wasm, md5 + fileExt);
         const cacheExists = existsSync(cachedPath);
         let shouldWriteCache = fetchFromServer || !cacheExists;
-        let buf: Buffer<ArrayBuffer>;
+        let buf!: Buffer<ArrayBuffer>;
         const doFetch = async () => {
-          const res = await fetch(wasmUrl);
+          const res = await got(wasmUrl, { throwHttpErrors: false });
           if (!res.ok) {
             throw new LoadError(
-              `Failed to fetch wasm from url: ${res.statusText}`,
-              res.status
+              `Failed to fetch wasm from url: ${res.statusMessage}`,
+              res.statusCode
             );
           }
-          buf = Buffer.from(await res.arrayBuffer());
+          buf = Buffer.from(res.rawBody) as Buffer<ArrayBuffer>;
         };
         if (!fetchFromServer && cacheExists) {
           buf = (await readFile(cachedPath)) as Buffer<ArrayBuffer>;
@@ -177,17 +178,20 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
       if (!url) {
         throw new LoadError("Bad Request: Missing URL parameter", 400);
       }
+      if (!urlCacheManager) {
+        throw new LoadError("URL cache manager is unavailable", 500);
+      }
       const cached = await urlCacheManager.getOrFetch(url, async () => {
-        const response = await fetch(url);
+        const response = await got(url, { throwHttpErrors: false });
         if (!response.ok) {
           throw new LoadError(
-            `Failed to fetch resource: ${response.statusText}`,
-            response.status
+            `Failed to fetch resource: ${response.statusMessage}`,
+            response.statusCode
           );
         }
         const contentType =
-          response.headers.get("Content-Type") || "application/octet-stream";
-        const body = Buffer.from(await response.arrayBuffer());
+          response.headers["content-type"] || "application/octet-stream";
+        const body = Buffer.from(response.rawBody);
         return { contentType, body };
       });
       return {
@@ -206,11 +210,14 @@ export default function registerOrpheusScheme(protocol: Protocol) {
       const { content, contentType, cacheable } = await loadFromOrpheusUrl(
         request.url
       );
+      const headers: Record<string, string> = {
+        "Content-Type": contentType,
+      };
+      if (!cacheable) {
+        headers["Cache-Control"] = "no-store";
+      }
       return new Response(content, {
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": cacheable ? undefined : "no-store",
-        },
+        headers,
       });
     } catch (error) {
       if (error instanceof LoadError) {
@@ -218,6 +225,7 @@ export default function registerOrpheusScheme(protocol: Protocol) {
       } else if (error instanceof NetworkError) {
         return Response.error();
       }
+      return new Response("Internal Server Error", { status: 500 });
     }
   });
 }

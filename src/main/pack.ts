@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import got from "got";
 import { pack as base } from "./folders";
 
 import type Pack from "./packs/Pack";
@@ -96,52 +97,42 @@ export class PackManager extends EventTarget {
       progress: 0,
     });
 
-    const response = await fetch(versions.downloadUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to download web pack: ${response.statusText}`);
-    }
+    const response = got.stream(versions.downloadUrl, {
+      throwHttpErrors: false,
+    });
 
-    const contentLength = response.headers.get("content-length");
-    const totalBytes = contentLength
-      ? Number.parseInt(contentLength, 10)
-      : undefined;
+    let totalBytes: number | undefined;
 
-    let buf: Buffer;
-    if (response.body) {
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let downloadedBytes = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        if (!value) {
-          continue;
-        }
-
-        chunks.push(value);
-        downloadedBytes += value.byteLength;
-        onProgress?.({
-          step: "downloading",
-          downloadedBytes,
-          totalBytes,
-          progress: totalBytes ? downloadedBytes / totalBytes : undefined,
-        });
+    response.once("response", (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        response.destroy(
+          new Error(`Failed to download web pack: ${res.statusMessage}`)
+        );
       }
+      const contentLength = res.headers["content-length"];
+      totalBytes = contentLength
+        ? Number.parseInt(contentLength, 10)
+        : undefined;
+    });
 
-      buf = Buffer.concat(chunks, downloadedBytes);
-    } else {
-      const arrayBuffer = await response.arrayBuffer();
-      buf = Buffer.from(arrayBuffer);
+    const chunks: Uint8Array[] = [];
+    let downloadedBytes = 0;
+    for await (const chunk of response) {
+      const data = chunk as Uint8Array;
+      chunks.push(data);
+      downloadedBytes += data.byteLength;
       onProgress?.({
         step: "downloading",
-        downloadedBytes: buf.length,
+        downloadedBytes,
         totalBytes,
-        progress: totalBytes ? buf.length / totalBytes : 1,
+        progress: totalBytes ? downloadedBytes / totalBytes : undefined,
       });
     }
+
+    const buf = Buffer.concat(
+      chunks.map((chunk) => Buffer.from(chunk)),
+      downloadedBytes
+    );
 
     const sevenZip = await import("7z-wasm").then((m) => m.default());
 
