@@ -1,6 +1,6 @@
 import { execFile as execFileCb, spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, cp, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
@@ -38,6 +38,7 @@ await writeFile(
     productName: flatpakOptions.productName,
   })
 );
+await cp(resolve(projectRoot, "LICENSE"), resolve(fakeAppDir, "LICENSE"));
 console.log("Created fake app dir at", fakeAppDir);
 // Create a dummy chrome-sandbox so requiresSandboxWrapper() returns true.
 // This causes the installer to generate the electron-wrapper script (zypak-wrapper call)
@@ -59,6 +60,17 @@ const installer = new Installer({
 
 await installer.generateDefaults();
 await installer.generateOptions();
+
+// We copied icon by ourself, so remove the installer-generated icon
+installer.options.icon = undefined;
+
+await installer.createStagingDir();
+
+// We need to execute content functions to get correct `desktopExec`
+for (const fn of installer.contentFunctions) {
+  if (fn === "copyApplication") continue;
+  await (installer[fn] as () => Promise<void>)();
+}
 
 await mkdir(outDir, { recursive: true });
 
