@@ -4,9 +4,10 @@
   
   <name>Open Orpheus</name>
   <summary>Netease Cloud Music for Linux</summary>
+  <summary xml:lang="zh-CN">Linux 版网易云音乐客户端</summary>
   <developer_name>YUCLing</developer_name>
   <developer id="io.github.yucling">
-    <name>YUCLing</name>
+    <name translate="no">YUCLing</name>
   </developer>
   <url type="homepage">https://github.com/YUCLing/open-orpheus</url>
   <url type="vcs-browser">https://github.com/YUCLing/open-orpheus</url>
@@ -27,6 +28,12 @@
       Open Orpheus is an open-source implementation of Netease Cloud Music browser host, it allows the user to run Netease Cloud Music official client&apos;s web resources on Linux, with the best compatibility provided by this host.
     </p>
   </description>
+  <description xml:lang="zh-CN">
+    <p>**本应用当前仅提供中文界面。**</p>
+    <p>
+      Open Orpheus 是网易云音乐浏览器宿主的开源实现，让用户可以在 Linux 上运行网易云音乐官方客户端的网页资源，并提供尽可能好的兼容性。
+    </p>
+  </description>
   
   <launchable type="desktop-id">io.github.yucling.open-orpheus.desktop</launchable>
 
@@ -36,16 +43,19 @@
   </branding>
 
   <screenshots>
-    <screenshot type="default" xml:lang="zh-CN">
+    <screenshot type="default">
       <caption>Main interface</caption>
+      <caption xml:lang="zh-CN">主界面</caption>
       <image>https://raw.githubusercontent.com/YUCLing/open-orpheus/e5bdb200f872ad69d7e9f4d6a22c27931c958c4c/assets/screenshots/1.png</image>
     </screenshot>
-    <screenshot xml:lang="zh-CN">
+    <screenshot>
       <caption>Player view</caption>
+      <caption xml:lang="zh-CN">播放器界面</caption>
       <image>https://raw.githubusercontent.com/YUCLing/open-orpheus/e5bdb200f872ad69d7e9f4d6a22c27931c958c4c/assets/screenshots/2.png</image>
     </screenshot>
-    <screenshot xml:lang="zh-CN">
+    <screenshot>
       <caption>Settings and customization</caption>
+      <caption xml:lang="zh-CN">设置与个性化</caption>
       <image>https://raw.githubusercontent.com/YUCLing/open-orpheus/e5bdb200f872ad69d7e9f4d6a22c27931c958c4c/assets/screenshots/3.png</image>
     </screenshot>
   </screenshots>
@@ -54,6 +64,9 @@
     <release version="0.5.3" date="2026-04-21">
       <description>
         <p>Improved overall compatibility and stability for running Netease Cloud Music web resources on Linux.</p>
+      </description>
+      <description xml:lang="zh-CN">
+        <p>提升了在 Linux 上运行网易云音乐网页资源时的整体兼容性与稳定性。</p>
       </description>
     </release>
   </releases>
