@@ -3,7 +3,7 @@
   <id>io.github.yucling.open-orpheus</id>
   
   <name>Open Orpheus</name>
-  <summary>An open-source implementation of Netease Cloud Music&apos;s Orpheus browser host.</summary>
+  <summary>Netease Cloud Music for Linux</summary>
   <developer_name>YUCLing</developer_name>
   <developer id="io.github.yucling">
     <name>YUCLing</name>
@@ -30,16 +30,21 @@
   
   <launchable type="desktop-id">io.github.yucling.open-orpheus.desktop</launchable>
 
+  <branding>
+    <color type="primary" scheme_preference="light">#5A9EF5</color>
+    <color type="primary" scheme_preference="dark">#2B4A73</color>
+  </branding>
+
   <screenshots>
-    <screenshot type="default">
+    <screenshot type="default" xml:lang="zh-CN">
       <caption>Main interface</caption>
       <image>https://raw.githubusercontent.com/YUCLing/open-orpheus/e5bdb200f872ad69d7e9f4d6a22c27931c958c4c/assets/screenshots/1.png</image>
     </screenshot>
-    <screenshot>
+    <screenshot xml:lang="zh-CN">
       <caption>Player view</caption>
       <image>https://raw.githubusercontent.com/YUCLing/open-orpheus/e5bdb200f872ad69d7e9f4d6a22c27931c958c4c/assets/screenshots/2.png</image>
     </screenshot>
-    <screenshot>
+    <screenshot xml:lang="zh-CN">
       <caption>Settings and customization</caption>
       <image>https://raw.githubusercontent.com/YUCLing/open-orpheus/e5bdb200f872ad69d7e9f4d6a22c27931c958c4c/assets/screenshots/3.png</image>
     </screenshot>
