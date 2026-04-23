@@ -194,14 +194,6 @@ type InstallerOptions = {
 const opts = installer.options as InstallerOptions;
 const appIdentifier = (installer as unknown as { appIdentifier: string })
   .appIdentifier;
-const metainfoFileName = `${opts.id}.metainfo.xml`;
-
-// Bundle metainfo next to the generated manifest/sources so it does not rely
-// on the project source archive layout during module build.
-await cp(
-  resolve(projectRoot, "packaging/flatpak/metainfo.xml"),
-  resolve(outDir, metainfoFileName)
-);
 
 const appModule = {
   name: appIdentifier,
@@ -242,7 +234,7 @@ const appModule = {
     `ln -sf /app/lib/${appIdentifier}/${opts.bin} /app/bin/${opts.bin}`,
 
     // Install AppStream metainfo
-    `install -Dm644 ${metainfoFileName} /app/share/metainfo/${opts.id}.metainfo.xml`,
+    `install -Dm644 packaging/flatpak/metainfo.xml /app/share/metainfo/${opts.id}.metainfo.xml`,
   ],
   sources: [
     "generated-node-sources.json",
@@ -253,10 +245,6 @@ const appModule = {
       "dest-filename": pnpmTarballName,
     },
     "generated-cargo-sources.json",
-    {
-      type: "file",
-      path: metainfoFileName,
-    },
     projectSource,
   ],
 };
