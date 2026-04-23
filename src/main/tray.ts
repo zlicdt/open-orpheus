@@ -1,6 +1,6 @@
 import os from "node:os";
 
-import { Menu, NativeImage, Tray } from "electron";
+import { Menu, nativeImage, NativeImage, Tray } from "electron";
 
 import { mainWindow } from "./window";
 import { kvGet } from "./kv";
@@ -16,6 +16,24 @@ export function get(): Tray | null {
 }
 
 export function setIcon(newIcon: NativeImage) {
+  if (os.platform() === "darwin") {
+    // On macOS, we need to generate a set of icons with different sizes
+    const image = nativeImage.createEmpty();
+
+    const sizes = [16, 32, 64];
+
+    for (let i = 0; i < sizes.length; i++) {
+      const size = sizes[i];
+      image.addRepresentation({
+        scaleFactor: i + 1,
+        width: size,
+        height: size,
+        buffer: newIcon.resize({ width: size, height: size }).toPNG(),
+      });
+    }
+
+    newIcon = image;
+  }
   icon = newIcon;
   if (trayIcon) {
     trayIcon.setImage(newIcon);
