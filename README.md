@@ -20,6 +20,12 @@
 
 ## 安装
 
+### Flathub
+
+通过 Flathub 一键安装
+
+[![Get it on Flathub](https://flathub.org/api/badge?locale=zh-Hans)](https://flathub.org/zh-Hans/apps/io.github.yucling.open-orpheus)
+
 ### Fedora Linux
 
 [![Copr build status](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/)

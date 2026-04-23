@@ -18,6 +18,12 @@ What else do you expect! It just provides a environment for the original client!
 
 ## Installation
 
+### Flathub
+
+One-click install via Flathub
+
+[![Get it on Flathub](https://flathub.org/api/badge?locale=en)](https://flathub.org/en/apps/io.github.yucling.open-orpheus)
+
 ### Fedora Linux
 
 [![Copr build status](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/luorain/open-orpheus/package/open-orpheus/)
