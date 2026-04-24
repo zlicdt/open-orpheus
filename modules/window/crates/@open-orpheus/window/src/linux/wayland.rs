@@ -2,11 +2,10 @@
 //
 // Strategy:
 //   • Inline-hook connect(2), close(2), recvmsg(2), sendmsg(2) in libc using
-//     `retour`.  retour patches the prologue of each libc function and installs
-//     a relay trampoline allocated *near the target* (within ±2 GB), so the
-//     5-byte E9 rel32 JMP works at any ASLR layout.  This avoids the crash
-//     that ilhook produced when V8's 4 TB address-space reservation pushed
-//     the trampoline beyond the rel32 range.
+//     `sighook::inline_hook_jump`. sighook patches each libc entry with either
+//     a near or absolute jump, so the hook stays valid regardless of ASLR
+//     layout. Original libc calls are preserved via raw symbol pointers and are
+//     invoked by temporarily unhooking the patched entry under a small mutex.
 //
 // Wire format (from connection.c):
 //   [object_id : u32][size<<16 | opcode : u32][payload ...]
@@ -26,71 +25,17 @@ use std::{
 };
 
 use libc::{
-    AF_UNIX, RTLD_DEFAULT, c_int, c_void, dlsym, msghdr, sa_family_t, sockaddr, sockaddr_un,
-    ssize_t,
+    AF_UNIX, RTLD_DEFAULT, SYS_close, SYS_connect, SYS_recvmsg, SYS_sendmsg, c_int, c_long, c_void,
+    dlsym, msghdr, sa_family_t, sockaddr, sockaddr_un, ssize_t, syscall,
 };
-use retour::GenericDetour;
+use sighook::{inline_hook_jump, unhook};
 
-// ── Function type aliases ─────────────────────────────────────────────────
+// ── Hook metadata storage ─────────────────────────────────────────────────
 
-type FnConnect = extern "C" fn(c_int, *const c_void, u32) -> c_int;
-type FnClose = extern "C" fn(c_int) -> c_int;
-type FnRecvmsg = extern "C" fn(c_int, *mut msghdr, c_int) -> ssize_t;
-type FnSendmsg = extern "C" fn(c_int, *const msghdr, c_int) -> ssize_t;
-
-// ── Hook handle storage ───────────────────────────────────────────────────
-//
-// GenericDetour is !Send/!Sync by default.  To store it in a OnceLock global
-// we need Send+Sync.  The orphan rule forbids `impl Send for GenericDetour<F>`
-// directly, so we wrap each detour in a local newtype and implement
-// Send+Sync on that.  The safety argument: init_wayland_hook is the sole
-// writer (runs single-threaded at module load) and all other accesses go
-// through OnceLock::get() which provides the necessary barrier.
-
-macro_rules! detour_newtype {
-    ($name:ident, $fn_ty:ty) => {
-        struct $name(GenericDetour<$fn_ty>);
-        unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
-        impl std::ops::Deref for $name {
-            type Target = GenericDetour<$fn_ty>;
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-    };
-}
-
-detour_newtype!(DetourConnect, FnConnect);
-detour_newtype!(DetourClose, FnClose);
-detour_newtype!(DetourRecvmsg, FnRecvmsg);
-detour_newtype!(DetourSendmsg, FnSendmsg);
-
-impl From<GenericDetour<FnConnect>> for DetourConnect {
-    fn from(d: GenericDetour<FnConnect>) -> Self {
-        Self(d)
-    }
-}
-impl From<GenericDetour<FnClose>> for DetourClose {
-    fn from(d: GenericDetour<FnClose>) -> Self {
-        Self(d)
-    }
-}
-impl From<GenericDetour<FnRecvmsg>> for DetourRecvmsg {
-    fn from(d: GenericDetour<FnRecvmsg>) -> Self {
-        Self(d)
-    }
-}
-impl From<GenericDetour<FnSendmsg>> for DetourSendmsg {
-    fn from(d: GenericDetour<FnSendmsg>) -> Self {
-        Self(d)
-    }
-}
-
-static HOOK_CONNECT: OnceLock<DetourConnect> = OnceLock::new();
-static HOOK_CLOSE: OnceLock<DetourClose> = OnceLock::new();
-static HOOK_RECVMSG: OnceLock<DetourRecvmsg> = OnceLock::new();
-static HOOK_SENDMSG: OnceLock<DetourSendmsg> = OnceLock::new();
+static HOOK_CONNECT_ADDR: OnceLock<u64> = OnceLock::new();
+static HOOK_CLOSE_ADDR: OnceLock<u64> = OnceLock::new();
+static HOOK_RECVMSG_ADDR: OnceLock<u64> = OnceLock::new();
+static HOOK_SENDMSG_ADDR: OnceLock<u64> = OnceLock::new();
 
 // ── Per-connection tracking state ──────────────────────────────────────────
 
@@ -832,18 +777,56 @@ fn reset_connection_state(fd: RawFd) {
     clear_first_cursor_enter_watchers_for_fd(fd);
 }
 
+#[inline]
+fn raw_syscall_ret(num: c_long, args: &[usize]) -> c_long {
+    unsafe {
+        match args {
+            [a0] => syscall(num, *a0),
+            [a0, a1] => syscall(num, *a0, *a1),
+            [a0, a1, a2] => syscall(num, *a0, *a1, *a2),
+            _ => -1,
+        }
+    }
+}
+
+#[inline]
+fn call_connect(fd: c_int, addr: *const c_void, addrlen: u32) -> c_int {
+    raw_syscall_ret(
+        SYS_connect as c_long,
+        &[fd as usize, addr as usize, addrlen as usize],
+    ) as c_int
+}
+
+#[inline]
+fn call_close(fd: c_int) -> c_int {
+    raw_syscall_ret(SYS_close as c_long, &[fd as usize]) as c_int
+}
+
+#[inline]
+fn call_recvmsg(fd: c_int, hdr: *mut msghdr, flags: c_int) -> ssize_t {
+    raw_syscall_ret(
+        SYS_recvmsg as c_long,
+        &[fd as usize, hdr as usize, flags as usize],
+    ) as ssize_t
+}
+
+#[inline]
+fn call_sendmsg(fd: c_int, hdr: *const msghdr, flags: c_int) -> ssize_t {
+    raw_syscall_ret(
+        SYS_sendmsg as c_long,
+        &[fd as usize, hdr as usize, flags as usize],
+    ) as ssize_t
+}
+
 // ── Hook callbacks ─────────────────────────────────────────────────────────
 //
-// Plain `extern "C"` functions installed by retour as inline prologue hooks.
-// Calling the original is done via `HOOK_*.get().unwrap().call(...)` which
-// routes through retour's trampoline (the saved original prologue + JMP back).
-//
-// Because the GenericDetour is stored in the OnceLock *before* enable() is
-// called, get() is always Some by the time any hook fires.
+// Plain `extern "C"` functions installed with sighook entry jumps.
+// Calling the original goes straight to the kernel syscall entry so we do not
+// mutate hook state while already inside a hooked libc wrapper.
 
 /// connect(2) — detect Wayland socket fds and register new connections.
 extern "C" fn hook_connect(fd: c_int, addr: *const c_void, addrlen: u32) -> c_int {
-    let ret = HOOK_CONNECT.get().map_or(-1, |h| h.call(fd, addr, addrlen));
+    let ret = call_connect(fd, addr, addrlen);
     if ret == 0 && is_wayland_socket(addr, addrlen) {
         IS_WAYLAND.set(true).ok();
         if let Some(m) = CONNS.get()
@@ -860,12 +843,12 @@ extern "C" fn hook_close(fd: c_int) -> c_int {
     if is_wayland_fd(fd) {
         reset_connection_state(fd);
     }
-    HOOK_CLOSE.get().map_or(-1, |h| h.call(fd))
+    call_close(fd)
 }
 
 /// recvmsg(2) — intercept server→client Wayland events.
 extern "C" fn hook_recvmsg(fd: c_int, hdr: *mut msghdr, flags: c_int) -> ssize_t {
-    let ret = HOOK_RECVMSG.get().map_or(-1, |h| h.call(fd, hdr, flags));
+    let ret = call_recvmsg(fd, hdr, flags);
     if ret > 0 && is_wayland_fd(fd) && !hdr.is_null() {
         let h = unsafe { &*hdr };
         if !h.msg_iov.is_null() {
@@ -896,7 +879,7 @@ extern "C" fn hook_recvmsg(fd: c_int, hdr: *mut msghdr, flags: c_int) -> ssize_t
 /// phantom state, and only the bytes actually accepted by the kernel
 /// are fed to the outbound parser.
 extern "C" fn hook_sendmsg(fd: c_int, hdr: *const msghdr, flags: c_int) -> ssize_t {
-    let ret = HOOK_SENDMSG.get().map_or(-1, |h| h.call(fd, hdr, flags));
+    let ret = call_sendmsg(fd, hdr, flags);
     if ret > 0 && is_wayland_fd(fd) && !hdr.is_null() {
         let h = unsafe { &*hdr };
         if !h.msg_iov.is_null() {
@@ -957,9 +940,7 @@ pub(super) fn send_raw_wayland(fd: RawFd, data: &mut [u8]) -> bool {
         msg_controllen: 0,
         msg_flags: 0,
     };
-    let ret = HOOK_SENDMSG
-        .get()
-        .map_or(-1, |h| h.call(fd, &msg as *const msghdr, 0));
+    let ret = call_sendmsg(fd, &msg as *const msghdr, 0);
     ret as usize == data.len()
 }
 
@@ -1057,39 +1038,26 @@ pub(super) fn get_last_created_window_id() -> Option<String> {
 
 // ── Hook installation ─────────────────────────────────────────────────────
 
-/// Resolves a libc symbol and creates a `GenericDetour` for it.
-/// The detour is stored in `slot` BEFORE `enable()` is called so that
-/// if the hook fires on another thread during enable(), `slot.get()` is
-/// already Some and the call can be forwarded safely.
+/// Resolves a libc symbol, saves the original function pointer, and patches the
+/// libc entry to jump to our hook.
 macro_rules! install_hook {
-    ($slot:expr, $name:literal, $fn_ty:ty, $detour_fn:expr) => {{
+    ($addr_slot:expr, $name:literal, $detour_fn:expr) => {{
         let sym = unsafe { dlsym(RTLD_DEFAULT, concat!($name, "\0").as_ptr() as *const _) };
         if sym.is_null() {
             eprintln!("[wayland] symbol not found: {} — hook setup aborted", $name);
             return;
         }
-        let target: $fn_ty = unsafe { mem::transmute(sym) };
-        let detour = match unsafe { retour::GenericDetour::<$fn_ty>::new(target, $detour_fn) } {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!(
-                    "[wayland] failed to create detour for {}: {} — hook setup aborted",
-                    $name, e
-                );
-                return;
-            }
-        };
-        // Store before enable so the hook fn can call .get() safely.
-        // Wrap in the local newtype to satisfy Send+Sync for OnceLock.
-        if $slot.set(detour.into()).is_err() {
-            eprintln!("[wayland] detour slot for {} already set — skipping", $name);
+        let target_addr = sym as usize as u64;
+        if $addr_slot.set(target_addr).is_err() {
+            eprintln!(
+                "[wayland] target address slot for {} already set — skipping",
+                $name
+            );
             return;
         }
-        if let Some(h) = $slot.get() {
-            if let Err(e) = unsafe { h.enable() } {
-                eprintln!("[wayland] failed to enable hook for {}: {}", $name, e);
-                return;
-            }
+        if let Err(e) = inline_hook_jump(target_addr, $detour_fn as *const () as usize as u64) {
+            eprintln!("[wayland] failed to enable hook for {}: {}", $name, e);
+            return;
         }
     }};
 }
@@ -1105,10 +1073,10 @@ pub(super) fn init_wayland_hook() {
     CURSOR_ENTER_WATCHERS.get_or_init(|| Mutex::new(HashMap::new()));
     ON_TOPLEVEL_CREATED.get_or_init(|| Mutex::new(Vec::new()));
 
-    install_hook!(HOOK_CONNECT, "connect", FnConnect, hook_connect);
-    install_hook!(HOOK_CLOSE, "close", FnClose, hook_close);
-    install_hook!(HOOK_RECVMSG, "recvmsg", FnRecvmsg, hook_recvmsg);
-    install_hook!(HOOK_SENDMSG, "sendmsg", FnSendmsg, hook_sendmsg);
+    install_hook!(HOOK_CONNECT_ADDR, "connect", hook_connect);
+    install_hook!(HOOK_CLOSE_ADDR, "close", hook_close);
+    install_hook!(HOOK_RECVMSG_ADDR, "recvmsg", hook_recvmsg);
+    install_hook!(HOOK_SENDMSG_ADDR, "sendmsg", hook_sendmsg);
 }
 
 /// Removes all installed Wayland hooks and resets all connection state.
@@ -1155,25 +1123,16 @@ pub(super) fn remove_wayland_hook() {
     {
         cbs.clear();
     }
-    // Disable all detours; retour restores the original prologue on disable().
-    if let Some(h) = HOOK_SENDMSG.get() {
-        unsafe {
-            h.disable().ok();
-        }
+    if let Some(addr) = HOOK_SENDMSG_ADDR.get() {
+        let _ = unhook(*addr);
     }
-    if let Some(h) = HOOK_RECVMSG.get() {
-        unsafe {
-            h.disable().ok();
-        }
+    if let Some(addr) = HOOK_RECVMSG_ADDR.get() {
+        let _ = unhook(*addr);
     }
-    if let Some(h) = HOOK_CLOSE.get() {
-        unsafe {
-            h.disable().ok();
-        }
+    if let Some(addr) = HOOK_CLOSE_ADDR.get() {
+        let _ = unhook(*addr);
     }
-    if let Some(h) = HOOK_CONNECT.get() {
-        unsafe {
-            h.disable().ok();
-        }
+    if let Some(addr) = HOOK_CONNECT_ADDR.get() {
+        let _ = unhook(*addr);
     }
 }
