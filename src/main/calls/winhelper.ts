@@ -168,6 +168,7 @@ registerCallHandler<[{ x: number; y: number }, { x: number; y: number }], void>(
   }
 );
 addKVEventListener("change", ((e: KvChangeEvent) => {
+  if (!mainWindow) return;
   const { key, current } = e.detail;
   if (key === "window.overrideMainWindowSizeLimit") {
     if (current === "true" || !mainWindowSizeLimits) {
