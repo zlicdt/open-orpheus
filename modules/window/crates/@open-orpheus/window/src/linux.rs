@@ -7,18 +7,14 @@ use neon::{
     types::JsValue,
     types::{JsBuffer, buffer::TypedArray},
 };
-#[cfg(target_arch = "x86_64")]
 use std::sync::OnceLock;
 
 mod dynload;
-#[cfg(target_arch = "x86_64")]
 mod wayland;
 mod x11;
 
-#[cfg(target_arch = "x86_64")]
 static DISABLE_WAYLAND_HOOKS: OnceLock<bool> = OnceLock::new();
 
-#[cfg(target_arch = "x86_64")]
 fn disable_wayland_hooks() -> bool {
     *DISABLE_WAYLAND_HOOKS.get_or_init(|| {
         std::env::var("DISABLE_WAYLAND_HOOKS")
@@ -33,31 +29,16 @@ fn disable_wayland_hooks() -> bool {
 
 #[neon::export]
 fn is_wayland() -> bool {
-    #[cfg(target_arch = "x86_64")]
-    {
-        wayland::is_wayland()
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        false
-    }
+    wayland::is_wayland()
 }
 
 #[neon::export]
 fn get_last_created_window_id() -> Option<String> {
-    #[cfg(target_arch = "x86_64")]
-    {
-        wayland::get_last_created_window_id()
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        None
-    }
+    wayland::get_last_created_window_id()
 }
 
 #[neon::export]
 fn drag_window<'cx>(cx: &mut Cx<'cx>, handle: Handle<JsBuffer>) -> NeonResult<()> {
-    #[cfg(target_arch = "x86_64")]
     if wayland::is_wayland() {
         wayland::send_xdg_toplevel_move();
         return Ok(());
@@ -92,49 +73,38 @@ fn capture_next_window_first_cursor_enter<'cx>(
     cx: &mut Cx<'cx>,
     callback: Handle<'cx, JsFunction>,
 ) -> NeonResult<()> {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if disable_wayland_hooks() {
-            let err_msg = cx.string(
-                "captureNextWindowFirstCursorEnter is unavailable when Wayland hooks are disabled",
-            );
-            return cx.throw(err_msg);
-        }
-
-        let channel: Channel = cx.channel();
-        let callback = callback.root(cx);
-        if !wayland::on_next_new_window_first_cursor_enter(move |x, y| {
-            channel.send(move |mut cx| {
-                let callback = callback.into_inner(&mut cx);
-                let this = cx.undefined();
-                let args: [Handle<JsValue>; 2] =
-                    [cx.number(x as f64).upcast(), cx.number(y as f64).upcast()];
-                callback.call(&mut cx, this, args)?;
-                Ok(())
-            });
-        }) {
-            let err_msg = cx.string(
-                "captureNextWindowFirstCursorEnter is unavailable because Wayland hooks are not initialized",
-            );
-            return cx.throw(err_msg);
-        }
-
-        return Ok(());
+    if disable_wayland_hooks() {
+        let err_msg = cx.string(
+            "captureNextWindowFirstCursorEnter is unavailable when Wayland hooks are disabled",
+        );
+        return cx.throw(err_msg);
     }
 
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        let err_msg =
-            cx.string("captureNextWindowFirstCursorEnter is only supported on Linux x86_64");
-        cx.throw(err_msg)
+    let channel: Channel = cx.channel();
+    let callback = callback.root(cx);
+    if !wayland::on_next_new_window_first_cursor_enter(move |x, y| {
+        channel.send(move |mut cx| {
+            let callback = callback.into_inner(&mut cx);
+            let this = cx.undefined();
+            let args: [Handle<JsValue>; 2] =
+                [cx.number(x as f64).upcast(), cx.number(y as f64).upcast()];
+            callback.call(&mut cx, this, args)?;
+            Ok(())
+        });
+    }) {
+        let err_msg = cx.string(
+            "captureNextWindowFirstCursorEnter is unavailable because Wayland hooks are not initialized",
+        );
+        return cx.throw(err_msg);
     }
+
+    Ok(())
 }
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
     neon::registered().export(&mut cx)?;
 
-    #[cfg(target_arch = "x86_64")]
     if !disable_wayland_hooks() {
         wayland::init_wayland_hook();
     }
@@ -144,7 +114,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn on_unload() {
-    #[cfg(target_arch = "x86_64")]
     if !disable_wayland_hooks() {
         wayland::remove_wayland_hook();
     }
