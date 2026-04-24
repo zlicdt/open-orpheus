@@ -17,7 +17,11 @@ import {
 import AppMenu, { AppMenuItem } from "../menu";
 import showManageWindow from "../windows/manage";
 import { registerGlobalShortcut, unregisterGlobalShortcut } from "../shortcuts";
-import { kvGet } from "../kv";
+import {
+  addEventListener as addKVEventListener,
+  KvChangeEvent,
+  kvGet,
+} from "../kv";
 
 function shouldApplyScaleFactor() {
   return (
@@ -137,6 +141,8 @@ registerCallHandler<[], [WindowPosition]>(
   }
 );
 
+type SizeLimit = { x: number; y: number };
+let mainWindowSizeLimits: [SizeLimit, SizeLimit] | null = null;
 registerCallHandler<[{ x: number; y: number }, { x: number; y: number }], void>(
   "winhelper.setWindowSizeLimit",
   (event, min, max) => {
@@ -145,11 +151,42 @@ registerCallHandler<[{ x: number; y: number }, { x: number; y: number }], void>(
     const scaleFactor = shouldApplyScaleFactor()
       ? getWindowScaleFactor(wnd)
       : 1;
-    // Use window module to set maximum size to avoid issues with maximized/fullscreen windows
-    setMinimumSize(wnd, min.x, min.y);
-    setMaximumSize(wnd, max.x * scaleFactor, max.y * scaleFactor);
+    if (
+      wnd !== mainWindow ||
+      kvGet("window.overrideMainWindowSizeLimit") !== "true"
+    ) {
+      // Use window module to set maximum size to avoid issues with maximized/fullscreen windows
+      setMinimumSize(wnd, min.x, min.y);
+      setMaximumSize(wnd, max.x * scaleFactor, max.y * scaleFactor);
+    }
+    if (wnd == mainWindow) {
+      mainWindowSizeLimits = [
+        min,
+        { x: max.x * scaleFactor, y: max.y * scaleFactor },
+      ];
+    }
   }
 );
+addKVEventListener("change", ((e: KvChangeEvent) => {
+  const { key, current } = e.detail;
+  if (key === "window.overrideMainWindowSizeLimit") {
+    if (current === "true" || !mainWindowSizeLimits) {
+      setMinimumSize(mainWindow, 0, 0);
+      setMaximumSize(mainWindow, 0, 0);
+    } else {
+      setMinimumSize(
+        mainWindow,
+        mainWindowSizeLimits[0].x,
+        mainWindowSizeLimits[0].y
+      );
+      setMaximumSize(
+        mainWindow,
+        mainWindowSizeLimits[1].x,
+        mainWindowSizeLimits[1].y
+      );
+    }
+  }
+}) as EventListener);
 
 registerCallHandler<[], void>("winhelper.bringWindowToTop", (event) => {
   const wnd = BrowserWindow.fromWebContents(event.sender);

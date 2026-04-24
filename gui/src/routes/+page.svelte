@@ -11,6 +11,9 @@
   import Database from "@lucide/svelte/icons/database";
   import LocalResources from "./LocalResources.svelte";
 
+  import AppWindow from "@lucide/svelte/icons/app-window";
+  import Window from "./Window.svelte";
+
   import TableOfContents from "@lucide/svelte/icons/table-of-contents";
   import Tray from "./Tray.svelte";
 
@@ -29,6 +32,12 @@
       name: "本地资源",
       icon: Database,
       component: LocalResources,
+    },
+    {
+      id: "window",
+      name: "窗口设置",
+      icon: AppWindow,
+      component: Window,
     },
     {
       id: "tray",
