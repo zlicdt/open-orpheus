@@ -59,19 +59,24 @@
   </screenshots>
 
   <releases>
+    <release version="0.6.0" date="2026-04-24">
+      <description>
+        <p>Supports overriding main window size limits.</p>
+        <p xml:lang="zh-CN">支持覆盖主窗口大小限制。</p>
+      </description>
+    </release>
+    <release version="0.5.6" date="2026-04-24">
+      <description>
+        <p>Improved aarch64 support.</p>
+        <p xml:lang="zh-CN">完善 aarch64 支持。</p>
+      </description>
+    </release>
     <release version="0.5.3" date="2026-04-21">
       <description>
         <p>Improved overall compatibility and stability for running Netease Cloud Music web resources on Linux.</p>
         <p xml:lang="zh-CN">提升了在 Linux 上运行网易云音乐网页资源时的整体兼容性与稳定性。</p>
       </description>
     </release>
-      <release version="0.5.6" date="2026-04-24">
-        <description>
-          <p>Improved aarch64 support.</p>
-          <p xml:lang="zh-CN">完善 aarch64 支持。</p>
-        </description>
-      </release>
-    
   </releases>
 
   <content_rating type="oars-1.1">
