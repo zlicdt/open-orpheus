@@ -27,10 +27,8 @@
     <p>
       Open Orpheus is an open-source implementation of Netease Cloud Music browser host, it allows the user to run Netease Cloud Music official client&apos;s web resources on Linux, with the best compatibility provided by this host.
     </p>
-  </description>
-  <description xml:lang="zh-CN">
-    <p>**本应用当前仅提供中文界面。**</p>
-    <p>
+    <p xml:lang="zh-CN">**本应用当前仅提供中文界面。**</p>
+    <p xml:lang="zh-CN">
       Open Orpheus 是网易云音乐浏览器宿主的开源实现，让用户可以在 Linux 上运行网易云音乐官方客户端的网页资源，并提供尽可能好的兼容性。
     </p>
   </description>
@@ -64,11 +62,16 @@
     <release version="0.5.3" date="2026-04-21">
       <description>
         <p>Improved overall compatibility and stability for running Netease Cloud Music web resources on Linux.</p>
-      </description>
-      <description xml:lang="zh-CN">
-        <p>提升了在 Linux 上运行网易云音乐网页资源时的整体兼容性与稳定性。</p>
+        <p xml:lang="zh-CN">提升了在 Linux 上运行网易云音乐网页资源时的整体兼容性与稳定性。</p>
       </description>
     </release>
+      <release version="0.5.6" date="2026-04-24">
+        <description>
+          <p>Improved aarch64 support.</p>
+          <p xml:lang="zh-CN">完善 aarch64 支持。</p>
+        </description>
+      </release>
+    
   </releases>
 
   <content_rating type="oars-1.1">
