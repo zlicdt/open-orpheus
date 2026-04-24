@@ -121,5 +121,4 @@ jobs:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           author: ${{ github.repository_owner }} <${{ github.repository_owner }}@users.noreply.github.com>
           committer: ${{ github.repository_owner }} <${{ github.repository_owner }}@users.noreply.github.com>
-          reviewers: YUCLing
           delete-branch: false
