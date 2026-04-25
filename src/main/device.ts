@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { data as dataDir } from "./folders";
 
@@ -19,12 +19,8 @@ export function getADDeviceId() {
 }
 
 function generateHexString(length = 52) {
-  let result = "";
-  const characters = "0123456789ABCDEF";
-  for (let i = 0; i < length; i++) {
-    result += characters[Math.floor(Math.random() * 16)];
-  }
-  return result;
+  const byteLength = Math.ceil(length / 2);
+  return randomBytes(byteLength).toString("hex").slice(0, length).toUpperCase();
 }
 
 function toLegacyEncodedToken(value: string) {
@@ -64,11 +60,9 @@ export async function prepareDeviceId() {
     }
   }
   // Generate a legal host MAC address: unicast and universally administered.
-  const firstOctet = Math.floor(Math.random() * 256) & 0xfc;
-  const randomMACAddress = [
-    firstOctet,
-    ...Array.from({ length: 5 }, () => Math.floor(Math.random() * 256)),
-  ]
+  const macBytes = randomBytes(6);
+  macBytes[0] = macBytes[0] & 0xfc;
+  const randomMACAddress = Array.from(macBytes)
     .map((value) => value.toString(16).padStart(2, "0"))
     .join(":")
     .toUpperCase();
