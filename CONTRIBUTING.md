@@ -1,6 +1,6 @@
 # 参与贡献 Open Orpheus
 
-[English Version](./CONTRIBUTING_en.md)
+[English Version](docs/CONTRIBUTING_en.md)
 
 首先，感谢你愿意花时间为 Open Orpheus 做贡献！不论是提交 issue、改进文档还是贡献代码，每一份帮助都十分珍贵。
 

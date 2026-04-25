@@ -1,6 +1,6 @@
 # 行为准则
 
-[English Version](./CODE_OF_CONDUCT_en.md)
+[English Version](docs/CODE_OF_CONDUCT_en.md)
 
 ## 我们的承诺
 

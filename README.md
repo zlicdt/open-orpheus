@@ -5,7 +5,7 @@
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/YUCLing/open-orpheus/total)
 ![GitHub Repo stars](https://img.shields.io/github/stars/YUCLing/open-orpheus)
 
-[English Version](./README_en.md)
+[English Version](docs/README_en.md)
 
 一个对网易云音乐 Orpheus 浏览器宿主的开源实现。
 
