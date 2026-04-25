@@ -56,7 +56,8 @@ export function createOverlayWindow(): BrowserWindow {
     resizable: true,
     alwaysOnTop: true,
     focusable: true,
-    fullscreen: true,
+    // Only KDE allows fullscreen transparent windows, see https://gitlab.freedesktop.org/wayland/wayland-protocols/-/issues/116
+    fullscreen: process.env.XDG_CURRENT_DESKTOP === "KDE",
     webPreferences: {
       partition: "open-orpheus",
       preload: join(__dirname, "menu.js"),
@@ -73,6 +74,14 @@ export function createOverlayWindow(): BrowserWindow {
   overlayWindow.on("closed", () => {
     overlayWindow = null;
   });
+
+  // For other DEs, we can only use a maximized window, which means we are not able to cover the taskbar,
+  // so cursor capturing is not reliable in other DEs.
+  if (process.env.XDG_CURRENT_DESKTOP !== "KDE") {
+    overlayWindow.once("show", () => {
+      overlayWindow?.maximize();
+    });
+  }
 
   return overlayWindow;
 }
