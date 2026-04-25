@@ -43,6 +43,7 @@ registerCallHandler<
         ...request.headers,
         "User-Agent": session.defaultSession.getUserAgent(),
         Cookie: stringifyCookie(await getCookies(request.url)),
+        Origin: "orpheus://orpheus",
       },
       body: request.body || undefined,
       throwHttpErrors: false,
