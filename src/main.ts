@@ -165,8 +165,8 @@ app.on("ready", async () => {
     if (os.platform() === "linux") {
       // Make some modules think we are indeed on desktop.
       userAgent = userAgent.replace(
-        /^(Mozilla\/5\.0 \([^)]*\))/,
-        "$1 (Windows NT 10.0; WOW64)"
+        /^(Mozilla\/5\.0 \(([^)]*)\))/,
+        "Mozilla/5.0 ($2; Windows NT 10.0; WOW64)"
       );
     }
     session.defaultSession.setUserAgent(
