@@ -27,8 +27,6 @@ import { initializeDatabases } from "./main/database";
 import packManager from "./main/pack";
 import showPackgeDownloadWindow from "./main/windows/package-download";
 import { setMainWindow } from "./main/window";
-
-import type WebPack from "./main/packs/WebPack";
 import {
   markStarted,
   started as appStarted,
@@ -36,6 +34,8 @@ import {
   markQuitting,
 } from "./main/lifecycle";
 import { stringifyError } from "./util";
+
+import type WebPack from "./main/packs/WebPack";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -161,6 +161,11 @@ app.on("ready", async () => {
     // Make sure data directory exists
     await mkdir(path.join(dataDir), { recursive: true });
 
+    const defaultUserAgent = session.defaultSession.getUserAgent();
+    session.defaultSession.setUserAgent(
+      `${defaultUserAgent} NeteaseMusicDesktop/${CORE_VERSION}`
+    );
+
     const openOrpheusSession = session.fromPartition("open-orpheus");
 
     await import("./main/gui").then((m) => {
@@ -188,11 +193,6 @@ app.on("ready", async () => {
 
     // Register for Open Orpheus session
     registerOrpheusScheme(openOrpheusSession.protocol);
-
-    const defaultUserAgent = session.defaultSession.getUserAgent();
-    session.defaultSession.setUserAgent(
-      `${defaultUserAgent} NeteaseMusicDesktop/${CORE_VERSION}`
-    );
 
     initializeDatabases();
 

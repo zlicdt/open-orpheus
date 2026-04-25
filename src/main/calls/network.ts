@@ -1,12 +1,11 @@
 import dns from "node:dns";
 
-import { stringifyCookie } from "cookie";
-import got, { RequestError } from "got";
+import { RequestError } from "got";
 import type { Method } from "got";
+
 import { registerCallHandler } from "../calls";
-import { getCookies, processSetCookie } from "../cookie";
 import { deserialData } from "../crypto";
-import { session } from "electron";
+import client from "../request";
 
 let globalFailCount = 0;
 let globalSucCount = 0;
@@ -37,13 +36,10 @@ registerCallHandler<
 >("network.fetch", async (_, request): Promise<[NetworkFetchResponse]> => {
   const retryCount = request.retryCount ?? 1;
   try {
-    const response = await got(request.url, {
+    const response = await client(request.url, {
       method: request.method as Method,
       headers: {
         ...request.headers,
-        "User-Agent": session.defaultSession.getUserAgent(),
-        Cookie: stringifyCookie(await getCookies(request.url)),
-        Origin: "orpheus://orpheus",
       },
       body: request.body || undefined,
       throwHttpErrors: false,
@@ -68,14 +64,6 @@ registerCallHandler<
         headers[key] = value;
       }
     }
-
-    const setCookie = response.headers["set-cookie"];
-    const setCookieHeaders = Array.isArray(setCookie)
-      ? setCookie
-      : setCookie
-        ? [setCookie]
-        : [];
-    processSetCookie(request.url, setCookieHeaders);
 
     const responseBody = Buffer.from(response.rawBody);
     const blob = request.isDecrypt

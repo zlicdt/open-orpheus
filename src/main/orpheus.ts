@@ -1,8 +1,9 @@
 import { extname, resolve } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 import { Protocol } from "electron";
-import got from "got";
 import mime from "mime";
 import unzipper from "unzipper";
 
@@ -10,8 +11,7 @@ import packManager from "./pack";
 import WebPack from "./packs/WebPack";
 import { sanitizeRelativePath } from "./util";
 import { storage as storageDir, wasm } from "./folders";
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import client from "./request";
 
 class NetworkError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -110,7 +110,7 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
         let shouldWriteCache = fetchFromServer || !cacheExists;
         let buf!: Buffer<ArrayBuffer>;
         const doFetch = async () => {
-          const res = await got(wasmUrl, { throwHttpErrors: false });
+          const res = await client(wasmUrl, { throwHttpErrors: false });
           if (res.statusCode < 200 || res.statusCode >= 300) {
             throw new LoadError(
               `Failed to fetch wasm from url: ${res.statusMessage}`,
@@ -182,7 +182,7 @@ export async function loadFromOrpheusUrl(url: string): Promise<{
         throw new LoadError("URL cache manager is unavailable", 500);
       }
       const cached = await urlCacheManager.getOrFetch(url, async () => {
-        const response = await got(url, { throwHttpErrors: false });
+        const response = await client(url, { throwHttpErrors: false });
         if (response.statusCode < 200 || response.statusCode >= 300) {
           throw new LoadError(
             `Failed to fetch resource: ${response.statusMessage}`,

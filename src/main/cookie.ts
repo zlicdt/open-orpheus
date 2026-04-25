@@ -3,16 +3,6 @@ import * as cookie from "cookie";
 
 const cookies = session.defaultSession.cookies;
 
-function parseProcessSetCookieArgs(
-  firstArg: string | string[],
-  secondArg?: string[]
-): { requestUrl?: string; setCookieHeaders: string[] } {
-  if (Array.isArray(firstArg)) {
-    return { setCookieHeaders: firstArg };
-  }
-  return { requestUrl: firstArg, setCookieHeaders: secondArg || [] };
-}
-
 export async function getFullCookies(url: string) {
   return await cookies.get({ url });
 }
@@ -48,20 +38,4 @@ export async function setCookie(url: string, setCookieValue: cookie.SetCookie) {
             ? "no_restriction"
             : setCookieValue.sameSite,
   });
-}
-
-export function processSetCookie(
-  firstArg: string | string[],
-  secondArg?: string[]
-) {
-  const { requestUrl, setCookieHeaders } = parseProcessSetCookieArgs(
-    firstArg,
-    secondArg
-  );
-  if (!requestUrl) return;
-
-  for (const header of setCookieHeaders) {
-    const parsedSetCookie = cookie.parseSetCookie(header);
-    setCookie(requestUrl, parsedSetCookie);
-  }
 }

@@ -1,5 +1,7 @@
-import { Protocol } from "electron";
+import type { IncomingHttpHeaders } from "node:http";
+
 import type { AudioPlayInfo } from "../../preload/Player";
+import client from "../request";
 
 // #region Interval helpers
 
@@ -92,18 +94,45 @@ export default class AudioStreamer extends EventTarget {
   }
 
   /** Extract total file size from a response's Content-Range or Content-Length headers. */
-  private parseSizeFromResponse(resp: Response): {
+  private parseSizeFromHeaders(headers: IncomingHttpHeaders): {
     totalSize: number;
     contentType: string;
   } {
-    const contentType = resp.headers.get("content-type") ?? "audio/mpeg";
-    const cr = resp.headers.get("content-range");
+    const getHeader = (value: string | string[] | undefined) => {
+      if (Array.isArray(value)) return value[0];
+      return value;
+    };
+
+    const contentType = getHeader(headers["content-type"]) ?? "audio/mpeg";
+    const cr = getHeader(headers["content-range"]);
     if (cr) {
       const match = cr.match(/\/(\d+)/);
       if (match) return { totalSize: Number(match[1]), contentType };
     }
-    const cl = resp.headers.get("content-length");
+    const cl = getHeader(headers["content-length"]);
     return { totalSize: cl ? Number(cl) : 0, contentType };
+  }
+
+  private async openRangeStream(
+    url: string,
+    start: number,
+    end?: number
+  ): Promise<{ stream: NodeJS.ReadableStream; headers: IncomingHttpHeaders }> {
+    const rangeValue =
+      end !== undefined ? `bytes=${start}-${end}` : `bytes=${start}-`;
+    const stream = client.stream(url, {
+      headers: { Range: rangeValue },
+      throwHttpErrors: false,
+    });
+
+    const headers = await new Promise<IncomingHttpHeaders>(
+      (resolve, reject) => {
+        stream.once("response", (response) => resolve(response.headers));
+        stream.once("error", reject);
+      }
+    );
+
+    return { stream, headers };
   }
 
   private ensureSongBuffer(
@@ -133,36 +162,38 @@ export default class AudioStreamer extends EventTarget {
     start: number,
     end: number
   ): Promise<void> {
-    const resp = await fetch(sb.url, {
-      headers: { Range: `bytes=${start}-${end}` },
-    });
-    const data = Buffer.from(await resp.arrayBuffer());
-    data.copy(sb.buffer, start);
-    AudioStreamer.mergeInterval(sb.intervals, [start, start + data.length - 1]);
+    const { stream } = await this.openRangeStream(sb.url, start, end);
+    let offset = start;
 
-    const pct = AudioStreamer.downloadedBytes(sb.intervals) / sb.totalSize;
-    this.onProgress(pct);
-    if (pct >= 1) this.onComplete();
+    for await (const value of stream as AsyncIterable<Buffer>) {
+      const chunk = Buffer.from(value);
+      chunk.copy(sb.buffer, offset);
+      offset += chunk.length;
+
+      AudioStreamer.mergeInterval(sb.intervals, [start, offset - 1]);
+      const pct = AudioStreamer.downloadedBytes(sb.intervals) / sb.totalSize;
+      this.onProgress(pct);
+    }
+
+    if (AudioStreamer.downloadedBytes(sb.intervals) >= sb.totalSize) {
+      this.onComplete();
+    }
   }
 
   /** Stream a pre-opened response body into the buffer and through the controller. */
   private async streamResponseIntoBuffer(
     sb: SongBuffer,
     start: number,
-    resp: Response,
+    stream: NodeJS.ReadableStream,
     controller: ReadableStreamDefaultController<Uint8Array>
   ): Promise<void> {
-    const reader = resp.body!.getReader();
     let offset = start;
 
-    for (;;) {
+    for await (const value of stream as AsyncIterable<Buffer>) {
       if (this.songBuffer !== sb) throw new Error("song changed");
-      const { done, value } = await reader.read();
-      if (done) break;
-
       const chunk = Buffer.from(value);
       chunk.copy(sb.buffer, offset);
-      controller.enqueue(new Uint8Array(value));
+      controller.enqueue(new Uint8Array(chunk));
       offset += chunk.length;
 
       AudioStreamer.mergeInterval(sb.intervals, [start, offset - 1]);
@@ -182,10 +213,8 @@ export default class AudioStreamer extends EventTarget {
     end: number,
     controller: ReadableStreamDefaultController<Uint8Array>
   ): Promise<void> {
-    const resp = await fetch(sb.url, {
-      headers: { Range: `bytes=${start}-${end}` },
-    });
-    await this.streamResponseIntoBuffer(sb, start, resp, controller);
+    const { stream } = await this.openRangeStream(sb.url, start, end);
+    await this.streamResponseIntoBuffer(sb, start, stream, controller);
   }
 
   /**
@@ -284,12 +313,8 @@ export default class AudioStreamer extends EventTarget {
 
     // Lazily initialise the song buffer from the first upstream request
     if (!this.songBuffer || this.songBuffer.songId !== songId) {
-      const rangeValue =
-        end !== undefined ? `bytes=${start}-${end}` : `bytes=${start}-`;
-      const firstResp = await fetch(url, {
-        headers: { Range: rangeValue },
-      });
-      const info = this.parseSizeFromResponse(firstResp);
+      const firstUpstream = await this.openRangeStream(url, start, end);
+      const info = this.parseSizeFromHeaders(firstUpstream.headers);
       if (!info.totalSize) {
         return new Response("Could not determine file size", { status: 502 });
       }
@@ -315,7 +340,12 @@ export default class AudioStreamer extends EventTarget {
       // Stream the first response directly, then the rest via streamRange
       const stream = new ReadableStream<Uint8Array>({
         start: (controller) => {
-          this.streamResponseIntoBuffer(sb, start, firstResp, controller)
+          this.streamResponseIntoBuffer(
+            sb,
+            start,
+            firstUpstream.stream,
+            controller
+          )
             .then(() => {
               controller.close();
               if (rangeHeader) this.backgroundFetchFull(sb);
@@ -414,24 +444,6 @@ export default class AudioStreamer extends EventTarget {
         "Accept-Ranges": "bytes",
         "Cache-Control": "no-store",
       },
-    });
-  }
-
-  registerAudioStreamerScheme(protocol: Protocol): void {
-    protocol.handle("audio", (request) => {
-      const requestUrl = new URL(request.url);
-
-      if (requestUrl.hostname !== "audio") {
-        return new Response("Not found", { status: 404 });
-      }
-
-      // Extract songId from audio://audio/<songId>
-      const songId = requestUrl.pathname.replace(/^\//, "");
-      if (!songId) {
-        return new Response("Missing song ID", { status: 400 });
-      }
-
-      return this.handleRequest(songId, request);
     });
   }
 }
