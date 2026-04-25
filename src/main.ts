@@ -161,9 +161,16 @@ app.on("ready", async () => {
     // Make sure data directory exists
     await mkdir(path.join(dataDir), { recursive: true });
 
-    const defaultUserAgent = session.defaultSession.getUserAgent();
+    let userAgent = session.defaultSession.getUserAgent();
+    if (os.platform() === "linux") {
+      // Make some modules think we are indeed on desktop.
+      userAgent = userAgent.replace(
+        /^(Mozilla\/5\.0 \([^)]*\))/,
+        "$1 (Windows NT 10.0; WOW64)"
+      );
+    }
     session.defaultSession.setUserAgent(
-      `${defaultUserAgent} NeteaseMusicDesktop/${CORE_VERSION}`
+      `${userAgent} NeteaseMusicDesktop/${CORE_VERSION}`
     );
 
     const openOrpheusSession = session.fromPartition("open-orpheus");

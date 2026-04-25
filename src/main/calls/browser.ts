@@ -8,6 +8,8 @@ type SetCookie = {
   Value: string;
   Path?: string;
   Url: string;
+  ["max-age"]?: number;
+  samsite?: "strict";
 };
 
 type FullCookie = {
@@ -56,11 +58,13 @@ registerCallHandler<[SetCookie], [boolean]>(
   "browser.setCookie",
   async (_, cookie) => {
     try {
-      setCookie(cookie.Url, {
+      await setCookie(cookie.Url, {
         name: cookie.Name,
         value: cookie.Value,
         domain: cookie.Domain,
         path: cookie.Path,
+        maxAge: cookie["max-age"],
+        sameSite: cookie.samsite,
       });
     } catch (error) {
       console.error(`Error setting cookie: ${stringifyError(error)}`);
