@@ -59,6 +59,12 @@
   </screenshots>
 
   <releases>
+    <release version="0.6.1" date="2026-04-26">
+      <description>
+        <p>Improved HTTP request mechanism. In hope of better performance and stability.</p>
+        <p xml:lang="zh-CN">改进了 HTTP 请求机制，以期获得更好的性能和稳定性。</p>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-04-24">
       <description>
         <p>Supports overriding main window size limits.</p>
