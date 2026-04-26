@@ -119,6 +119,6 @@ jobs:
 
             Source workflow run:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          author: ${{ github.repository_owner }} <${{ github.repository_owner }}@users.noreply.github.com>
-          committer: ${{ github.repository_owner }} <${{ github.repository_owner }}@users.noreply.github.com>
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          assignees: YUCLing
           delete-branch: false
