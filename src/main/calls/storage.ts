@@ -350,7 +350,7 @@ type AddId3Request = {
   tpos: string; // Track number? "01"
   trck: string; // Track number? "1"
 };
-// `mediaInfo` is saved to comment, with encryption
+// `mediaInfo` is saved to comment, with encryption (enData using its own key), prefixed with `163 key(Don't modify):`
 // Reply with `storage.onaddid3done`
 // - taskId
 // - code? 1

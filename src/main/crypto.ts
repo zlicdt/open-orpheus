@@ -9,6 +9,9 @@ export const DATA_AES_KEY = Buffer.from("(b)$@.a!mr+-<?`x");
 // AES-128 key used by serialKey
 export const SERIAL_AES_KEY = Buffer.from(")(13daqP@ssw0rd~");
 
+// AES-128 key used by ID3 comments
+export const ID3_AES_KEY = Buffer.from("#14ljk_!]&0U<'(");
+
 // AES-128 key for EAPI request encryption
 export const EAPI_KEY = Buffer.from("e82ckenh8dichen8");
 
