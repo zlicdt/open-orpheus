@@ -49,7 +49,7 @@ jobs:
           done
 
       - name: Upload files to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: release-files/*
           fail_on_unmatched_files: false

@@ -106,7 +106,7 @@ jobs:
           cp -r flatpak-builder/. flathub-repo/
 
       - name: Create pull request in Flathub repository
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.FLATHUB_GITHUB_TOKEN }}
           path: flathub-repo
