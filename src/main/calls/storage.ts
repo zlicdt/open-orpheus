@@ -347,8 +347,8 @@ type AddId3Request = {
   talb: string; // Track album
   tit2: string; // Track title
   tpe1: string; // Track artists
-  tpos: string; // Track number? "01"
-  trck: string; // Track number? "1"
+  tpos: string; // Disc number
+  trck: string; // Track pos
 };
 // `mediaInfo` is saved to comment, with encryption (enData using its own key), prefixed with `163 key(Don't modify):`
 // Reply with `storage.onaddid3done`
