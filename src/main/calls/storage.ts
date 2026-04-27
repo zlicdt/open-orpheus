@@ -1,17 +1,29 @@
-import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, extname, join, resolve } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 
 import { app } from "electron";
+import mime from "mime";
+import { MetaPicture, MusicTagger } from "music-tag-native";
 
 import {
   data as dataDir,
   defaultCache,
+  download,
+  downloadTemp,
   setCachePath,
   setDownloadPath,
 } from "../folders";
 import { registerCallHandler } from "../calls";
-import { sanitizeRelativePath } from "../util";
+import { normalizePath, sanitizeRelativePath } from "../util";
 import { getWebDb } from "../database";
 import {
   CacheTrackMeta,
@@ -23,6 +35,9 @@ import createCacheManager, {
   playCacheManager,
 } from "../cache";
 import { stringifyError } from "../../util";
+import { deData, enData, ID3_AES_KEY } from "../crypto";
+
+const ID3_COMMENT_PREFIX = "163 key(Don't modify):";
 
 registerCallHandler<[string, string, string], [string, string]>(
   "storage.init",
@@ -136,7 +151,7 @@ registerCallHandler<
       }
       filePath = p;
     } else {
-      filePath = path;
+      filePath = normalizePath(path);
     }
 
     await mkdir(dirname(filePath), { recursive: true });
@@ -160,7 +175,7 @@ registerCallHandler<[string, { id: string; path: string }[], string], void>(
   "storage.checkFilesExist",
   async (event, taskId, files, basePath) => {
     const results = files.map(async (file) => {
-      const filePath = join(basePath, file.path);
+      const filePath = normalizePath(basePath, file.path);
       return { id: file.id, exists: existsSync(filePath) };
     });
     event.sender.send(
@@ -173,7 +188,6 @@ registerCallHandler<[string, { id: string; path: string }[], string], void>(
   }
 );
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type DownloadScannerItem = {
   comment: string; // comment added by addid3
   creation_time: number; // timestamp
@@ -186,9 +200,52 @@ type DownloadScannerItem = {
 // - array of `DownloadScannerItem`
 registerCallHandler<[string, boolean, string, number, string[]], void>(
   "storage.downloadscanner",
-  (event) => {
-    // TODO: Scan download dir for downloaded music
-    event.sender.send("channel.call", "storage.ondownloadscanner", []);
+  async (event) => {
+    const files = await readdir(download);
+    const items: DownloadScannerItem[] = [];
+    await Promise.all(
+      files.map(async (file) => {
+        const filePath = join(download, file);
+        if (existsSync(filePath) && (await stat(filePath)).isFile()) {
+          let comment = "";
+          try {
+            const tagger = new MusicTagger();
+            tagger.loadPath(filePath);
+            if (
+              !tagger.comment ||
+              !tagger.comment.startsWith(ID3_COMMENT_PREFIX)
+            ) {
+              tagger.dispose();
+              return;
+            }
+            const decryptedComment = deData(
+              tagger.comment.slice(ID3_COMMENT_PREFIX.length),
+              ID3_AES_KEY,
+              false
+            );
+            tagger.dispose();
+            if (!decryptedComment) return;
+            comment = decryptedComment
+              ? decryptedComment.toString("utf-8")
+              : "";
+          } catch (error) {
+            console.error(
+              `Error reading ID3 tags from ${filePath}: ${stringifyError(error)}`
+            );
+          }
+          const statResult = await stat(filePath);
+          items.push({
+            comment,
+            creation_time: statResult.birthtimeMs,
+            last_accessed: statResult.atimeMs,
+            last_modified: statResult.mtimeMs,
+            path: file,
+            size: statResult.size,
+          });
+        }
+      })
+    );
+    event.sender.send("channel.call", "storage.ondownloadscanner", items);
   }
 );
 
@@ -341,7 +398,7 @@ registerCallHandler<[string, "abs" | "rel", "", string], void>(
 );
 
 type AddId3Request = {
-  encrypt: boolean;
+  encrypt: boolean; // Should use .ncm format
   image_rel_path: string;
   media_rel_path: string;
   talb: string; // Track album
@@ -357,6 +414,49 @@ type AddId3Request = {
 // - final media path relative to download path
 registerCallHandler<[string, string, string, string, AddId3Request], void>(
   "storage.addid3",
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {}
+  async (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {
+    const tagger = new MusicTagger();
+
+    mediaPath = normalizePath(mediaPath);
+
+    tagger.loadPath(mediaPath);
+
+    tagger.album = id3Info.talb;
+    tagger.title = id3Info.tit2;
+    tagger.artist = id3Info.tpe1;
+    tagger.discNumber = parseInt(id3Info.tpos) || 0;
+    tagger.trackNumber = parseInt(id3Info.trck) || 0;
+
+    const imageFullPath = normalizePath(downloadTemp, imagePath);
+    if (existsSync(imageFullPath)) {
+      const mimeType = mime.getType(imageFullPath);
+      if (mimeType) {
+        const imageData = await readFile(imageFullPath);
+        tagger.pictures = [new MetaPicture(mimeType, imageData)];
+      }
+    }
+
+    tagger.comment = `${ID3_COMMENT_PREFIX}${enData(mediaInfo, ID3_AES_KEY, false)}`;
+
+    let finalPath = normalizePath(download, id3Info.media_rel_path);
+    if (finalPath.endsWith(".ncm")) {
+      // Current we don't know what's .ncm format, just rename to the original extension
+      const originalExt = extname(mediaPath);
+      finalPath = finalPath.slice(0, -4) + originalExt;
+    }
+    tagger.save(finalPath);
+
+    tagger.dispose();
+
+    await rm(imageFullPath);
+    await rm(mediaPath);
+
+    event.sender.send(
+      "channel.call",
+      "storage.onaddid3done",
+      taskId,
+      1,
+      id3Info.media_rel_path
+    );
+  }
 );

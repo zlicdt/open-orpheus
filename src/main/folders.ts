@@ -1,6 +1,11 @@
 import { app } from "electron";
 import { resolve } from "node:path";
 
+export const downloadTemp = resolve(
+  app.getPath("temp"),
+  "open-orpheus-download-temp"
+);
+
 export const data = resolve(app.isPackaged ? app.getPath("userData") : "data");
 
 export const pack = resolve(data, "package");

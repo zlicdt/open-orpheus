@@ -10,7 +10,7 @@ export const DATA_AES_KEY = Buffer.from("(b)$@.a!mr+-<?`x");
 export const SERIAL_AES_KEY = Buffer.from(")(13daqP@ssw0rd~");
 
 // AES-128 key used by ID3 comments
-export const ID3_AES_KEY = Buffer.from("#14ljk_!]&0U<'(");
+export const ID3_AES_KEY = Buffer.from("#14ljk_!\\]&0U<'(");
 
 // AES-128 key for EAPI request encryption
 export const EAPI_KEY = Buffer.from("e82ckenh8dichen8");
@@ -80,7 +80,11 @@ export function enData(
  * Pipeline (reversed):
  *   Base64 #2 decode → Base64 #1 decode → AES-128-ECB decrypt → PKCS#7 unpad
  */
-export function deData(bufOr2Base64: string | Buffer, key = DATA_AES_KEY) {
+export function deData(
+  bufOr2Base64: string | Buffer,
+  key = DATA_AES_KEY,
+  doubleBase64 = true
+): Buffer | null {
   if (!Buffer.isBuffer(key) || key.length !== 0x10) {
     console.error("Error: deData: invalid key length, expected 16 bytes");
     return null;
@@ -93,7 +97,7 @@ export function deData(bufOr2Base64: string | Buffer, key = DATA_AES_KEY) {
       : bufOr2Base64.toString("utf8");
 
   // Reverse Base64 #1
-  const ciphertext = Buffer.from(base64Once, "base64");
+  const ciphertext = Buffer.from(base64Once, doubleBase64 ? "base64" : "utf8");
 
   if (ciphertext.length === 0 || ciphertext.length % 16 !== 0) {
     console.error("Error: deData: ciphertext length is not a multiple of 16");

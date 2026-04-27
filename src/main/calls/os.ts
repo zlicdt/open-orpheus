@@ -88,6 +88,10 @@ registerCallHandler<[string], void>("os.shellOpen", (event, path) => {
   shell.openPath(path);
 });
 
+registerCallHandler<[string], void>("os.shellExplor", (event, path) => {
+  shell.showItemInFolder(path);
+});
+
 let preventSystemSleepBlocker: null | number = null,
   preventDisplaySleepBlocker: null | number = null;
 registerCallHandler<
