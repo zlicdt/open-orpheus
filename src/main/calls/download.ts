@@ -68,9 +68,6 @@ registerCallHandler<[DownloadStartRequest], void>(
     });
 
     task.addEventListener("progress", ((e: ProgressEvent) => {
-      console.log(
-        `Download progress for id ${id}: ${e.detail.downloaded}/${e.detail.total} bytes at ${e.detail.speed} B/s`
-      );
       event.sender.send("channel.call", "download.onprocess", id, {
         down: e.detail.downloaded,
         islast: false,
@@ -83,9 +80,6 @@ registerCallHandler<[DownloadStartRequest], void>(
     }) as EventListener);
 
     task.addEventListener("end", ((e: EndEvent) => {
-      console.log(
-        `Download completed for id ${id}: ${e.detail.downloaded}/${e.detail.total} bytes at ${e.detail.speed} B/s`
-      );
       event.sender.send("channel.call", "download.onprocess", id, {
         down: e.detail.downloaded,
         islast: true,

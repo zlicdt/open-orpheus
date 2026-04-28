@@ -91,13 +91,14 @@ export function deData(
   }
 
   // Reverse Base64 #2
-  const base64Once =
+  let ciphertext: Buffer =
     typeof bufOr2Base64 === "string"
-      ? Buffer.from(bufOr2Base64, "base64").toString("utf8")
-      : bufOr2Base64.toString("utf8");
+      ? Buffer.from(bufOr2Base64, "base64")
+      : bufOr2Base64;
 
   // Reverse Base64 #1
-  const ciphertext = Buffer.from(base64Once, doubleBase64 ? "base64" : "utf8");
+  if (doubleBase64)
+    ciphertext = Buffer.from(ciphertext.toString("utf8"), "base64");
 
   if (ciphertext.length === 0 || ciphertext.length % 16 !== 0) {
     console.error("Error: deData: ciphertext length is not a multiple of 16");

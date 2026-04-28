@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, watch } from "node:fs";
 
 import { app } from "electron";
 import mime from "mime";
@@ -39,6 +39,52 @@ import { deData, enData, ID3_AES_KEY } from "../crypto";
 
 const ID3_COMMENT_PREFIX = "163 key(Don't modify):";
 
+type DownloadScannerItem = {
+  comment: string; // comment added by addid3
+  creation_time: number; // timestamp
+  last_accessed: number;
+  last_modified: number;
+  path: string; // path relative to download dir
+  size: number;
+};
+
+async function readDownloadedMusicInfo(
+  file: string,
+  base: string | undefined = undefined
+): Promise<DownloadScannerItem | undefined> {
+  const filePath = normalizePath(base ?? "", file);
+  let comment = "";
+  try {
+    const tagger = new MusicTagger();
+    tagger.loadPath(filePath);
+    if (!tagger.comment || !tagger.comment.startsWith(ID3_COMMENT_PREFIX)) {
+      tagger.dispose();
+      return;
+    }
+    const decryptedComment = deData(
+      tagger.comment.slice(ID3_COMMENT_PREFIX.length),
+      ID3_AES_KEY,
+      false
+    );
+    tagger.dispose();
+    if (!decryptedComment) return;
+    comment = decryptedComment ? decryptedComment.toString("utf-8") : "";
+  } catch (error) {
+    console.error(
+      `Error reading ID3 tags from ${filePath}: ${stringifyError(error)}`
+    );
+  }
+  const statResult = await stat(filePath);
+  return {
+    comment,
+    creation_time: statResult.birthtimeMs,
+    last_accessed: statResult.atimeMs,
+    last_modified: statResult.mtimeMs,
+    path: file,
+    size: statResult.size,
+  };
+}
+
 registerCallHandler<[string, string, string], [string, string]>(
   "storage.init",
   (event, downloadDir, someNumStr, cacheDir) => {
@@ -53,6 +99,23 @@ registerCallHandler<[string, string, string], [string, string]>(
     setDownloadPath(downloadDir);
     setCachePath(cacheDir);
     createCacheManager();
+
+    watch(downloadDir, { recursive: true }, async (eventType, filename) => {
+      if (!filename) return;
+      const filePath = join(downloadDir, filename);
+      if (
+        existsSync(filePath) &&
+        (await stat(filePath).then((s) => s.isFile()))
+      ) {
+        const info = await readDownloadedMusicInfo(filename, downloadDir);
+        if (info) {
+          event.sender.send("channel.call", "storage.ondownloadscanner", [
+            info,
+          ]);
+        }
+      }
+    });
+
     return [downloadDir, cacheDir];
   }
 );
@@ -188,64 +251,30 @@ registerCallHandler<[string, { id: string; path: string }[], string], void>(
   }
 );
 
-type DownloadScannerItem = {
-  comment: string; // comment added by addid3
-  creation_time: number; // timestamp
-  last_accessed: number;
-  last_modified: number;
-  path: string; // path relative to download dir
-  size: number;
-};
 // Reply with `storage.ondownloadscanner`
 // - array of `DownloadScannerItem`
-registerCallHandler<[string, boolean, string, number, string[]], void>(
+registerCallHandler<
+  [string, boolean, string, number, string[]],
+  [DownloadScannerItem[]]
+>(
   "storage.downloadscanner",
-  async (event) => {
-    const files = await readdir(download);
+  async (event, path, falseBool, emptyStr, limit, excludes) => {
+    const files = await readdir(path);
     const items: DownloadScannerItem[] = [];
+    const excludeFiles = excludes.map((p) => normalizePath(path, p));
     await Promise.all(
-      files.map(async (file) => {
-        const filePath = join(download, file);
-        if (existsSync(filePath) && (await stat(filePath)).isFile()) {
-          let comment = "";
-          try {
-            const tagger = new MusicTagger();
-            tagger.loadPath(filePath);
-            if (
-              !tagger.comment ||
-              !tagger.comment.startsWith(ID3_COMMENT_PREFIX)
-            ) {
-              tagger.dispose();
-              return;
-            }
-            const decryptedComment = deData(
-              tagger.comment.slice(ID3_COMMENT_PREFIX.length),
-              ID3_AES_KEY,
-              false
-            );
-            tagger.dispose();
-            if (!decryptedComment) return;
-            comment = decryptedComment
-              ? decryptedComment.toString("utf-8")
-              : "";
-          } catch (error) {
-            console.error(
-              `Error reading ID3 tags from ${filePath}: ${stringifyError(error)}`
-            );
+      files
+        .filter((file) => !excludeFiles.includes(normalizePath(path, file)))
+        .slice(0, limit)
+        .map(async (file) => {
+          const filePath = join(path, file);
+          if (existsSync(filePath) && (await stat(filePath)).isFile()) {
+            const info = await readDownloadedMusicInfo(file, path);
+            if (info) items.push(info);
           }
-          const statResult = await stat(filePath);
-          items.push({
-            comment,
-            creation_time: statResult.birthtimeMs,
-            last_accessed: statResult.atimeMs,
-            last_modified: statResult.mtimeMs,
-            path: file,
-            size: statResult.size,
-          });
-        }
-      })
+        })
     );
-    event.sender.send("channel.call", "storage.ondownloadscanner", items);
+    return [items];
   }
 );
 
