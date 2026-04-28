@@ -414,49 +414,52 @@ type AddId3Request = {
 // - final media path relative to download path
 registerCallHandler<[string, string, string, string, AddId3Request], void>(
   "storage.addid3",
-  async (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {
-    const tagger = new MusicTagger();
+  (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {
+    // Don't block the call.
+    (async () => {
+      const tagger = new MusicTagger();
 
-    mediaPath = normalizePath(mediaPath);
+      mediaPath = normalizePath(mediaPath);
 
-    tagger.loadPath(mediaPath);
+      tagger.loadPath(mediaPath);
 
-    tagger.album = id3Info.talb;
-    tagger.title = id3Info.tit2;
-    tagger.artist = id3Info.tpe1;
-    tagger.discNumber = parseInt(id3Info.tpos) || 0;
-    tagger.trackNumber = parseInt(id3Info.trck) || 0;
+      tagger.album = id3Info.talb;
+      tagger.title = id3Info.tit2;
+      tagger.artist = id3Info.tpe1;
+      tagger.discNumber = parseInt(id3Info.tpos) || 0;
+      tagger.trackNumber = parseInt(id3Info.trck) || 0;
 
-    const imageFullPath = normalizePath(downloadTemp, imagePath);
-    if (existsSync(imageFullPath)) {
-      const mimeType = mime.getType(imageFullPath);
-      if (mimeType) {
-        const imageData = await readFile(imageFullPath);
-        tagger.pictures = [new MetaPicture(mimeType, imageData)];
+      const imageFullPath = normalizePath(downloadTemp, imagePath);
+      if (existsSync(imageFullPath)) {
+        const mimeType = mime.getType(imageFullPath);
+        if (mimeType) {
+          const imageData = await readFile(imageFullPath);
+          tagger.pictures = [new MetaPicture(mimeType, imageData)];
+        }
       }
-    }
 
-    tagger.comment = `${ID3_COMMENT_PREFIX}${enData(mediaInfo, ID3_AES_KEY, false)}`;
+      tagger.comment = `${ID3_COMMENT_PREFIX}${enData(mediaInfo, ID3_AES_KEY, false)}`;
 
-    let finalPath = normalizePath(download, id3Info.media_rel_path);
-    if (finalPath.endsWith(".ncm")) {
-      // Current we don't know what's .ncm format, just rename to the original extension
-      const originalExt = extname(mediaPath);
-      finalPath = finalPath.slice(0, -4) + originalExt;
-    }
-    tagger.save(finalPath);
+      let finalPath = normalizePath(download, id3Info.media_rel_path);
+      if (finalPath.endsWith(".ncm")) {
+        // Current we don't know what's .ncm format, just rename to the original extension
+        const originalExt = extname(mediaPath);
+        finalPath = finalPath.slice(0, -4) + originalExt;
+      }
+      tagger.save(finalPath);
 
-    tagger.dispose();
+      tagger.dispose();
 
-    await rm(imageFullPath);
-    await rm(mediaPath);
+      await rm(imageFullPath);
+      await rm(mediaPath);
 
-    event.sender.send(
-      "channel.call",
-      "storage.onaddid3done",
-      taskId,
-      1,
-      id3Info.media_rel_path
-    );
+      event.sender.send(
+        "channel.call",
+        "storage.onaddid3done",
+        taskId,
+        1,
+        id3Info.media_rel_path
+      );
+    })();
   }
 );

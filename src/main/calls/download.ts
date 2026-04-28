@@ -1,16 +1,17 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import crypto from "node:crypto";
-
 import { registerCallHandler } from "../calls";
-import client from "../request";
+import startDownload, {
+  type DownloadTask,
+  type ProgressEvent,
+  type EndEvent,
+  type ErrorEvent,
+} from "../download";
 import { downloadTemp } from "../folders";
 import { normalizePath } from "../util";
 
 type DownloadStartRequest = {
   ext_header: string;
   id: string;
-  md5: string;
+  md5?: string;
   md5_check_fail: number; // 0 or 1?
   mediaType: number;
   pre_path: string;
@@ -20,7 +21,7 @@ type DownloadStartRequest = {
 };
 
 // Payload of `download.onprocess`
-type DownloadProcessPayload = {
+/* type DownloadProcessPayload = {
   down: number; // Downloaded bytes
   islast: boolean; // Is the last progress update
   path: string; // Local file path
@@ -28,144 +29,120 @@ type DownloadProcessPayload = {
   speed: number; // Download speed in bytes/sec
   total: number; // Total bytes to download
   type: number;
-};
+}; */
+
+const downloadTasks = new Map<string, DownloadTask>();
 
 registerCallHandler<[DownloadStartRequest], void>(
   "download.start",
-  (event, request: DownloadStartRequest) => {
-    // Early resolve the call
-    (async function () {
-      const {
-        ext_header,
-        id,
-        //md5,
-        //md5_check_fail,
-        //mediaType,
-        //pre_path,
-        rel_path,
-        size,
-        url,
-      } = request;
+  async (event, request: DownloadStartRequest) => {
+    const {
+      ext_header,
+      id,
+      md5,
+      //md5_check_fail,
+      //mediaType,
+      //pre_path,
+      rel_path,
+      size,
+      url,
+    } = request;
 
-      // Parse headers from JSON string
-      let headers: Record<string, string> = {};
-      if (ext_header) {
-        try {
-          headers = JSON.parse(ext_header);
-        } catch (error) {
-          console.error("Failed to parse ext_header JSON:", error);
-        }
-      }
-
-      // Construct destination path: tmpdir + rel_path
-      const destPath = normalizePath(downloadTemp, rel_path);
-
-      // Ensure directory exists
+    // Parse headers from JSON string
+    let headers: Record<string, string> = {};
+    if (ext_header) {
       try {
-        await fs.mkdir(path.dirname(destPath), { recursive: true });
+        headers = JSON.parse(ext_header);
       } catch (error) {
-        console.error("Failed to create download directory:", error);
-        return;
+        console.error("Failed to parse ext_header JSON:", error);
       }
+    }
 
-      let downloadedBytes = 0;
-      const startTime = Date.now();
+    // Construct destination path: tmpdir + rel_path
+    const destPath = normalizePath(downloadTemp, rel_path);
 
-      // Speed calculation with exponential moving average
-      let smoothedSpeed = 0;
-      const EMA_ALPHA = 0.3; // Smoothing factor (0-1, lower = more stable)
-      let lastUpdateTime = startTime;
-      let lastDownloadedBytes = 0;
-      const MIN_UPDATE_INTERVAL = 100; // Minimum ms between speed updates
+    const task = await startDownload(url, destPath, {
+      headers,
+      md5,
+      size,
+    });
 
-      try {
-        const response = client.stream(url, {
-          headers,
-        });
+    task.addEventListener("progress", ((e: ProgressEvent) => {
+      console.log(
+        `Download progress for id ${id}: ${e.detail.downloaded}/${e.detail.total} bytes at ${e.detail.speed} B/s`
+      );
+      event.sender.send("channel.call", "download.onprocess", id, {
+        down: e.detail.downloaded,
+        islast: false,
+        path: destPath,
+        relative: rel_path,
+        speed: e.detail.speed,
+        total: e.detail.total || size,
+        type: 0,
+      });
+    }) as EventListener);
 
-        const fsHandle = await fs.open(destPath, "w");
-        const writeStream = fsHandle.createWriteStream();
-        const hash = crypto.createHash("md5");
+    task.addEventListener("end", ((e: EndEvent) => {
+      console.log(
+        `Download completed for id ${id}: ${e.detail.downloaded}/${e.detail.total} bytes at ${e.detail.speed} B/s`
+      );
+      event.sender.send("channel.call", "download.onprocess", id, {
+        down: e.detail.downloaded,
+        islast: true,
+        path: destPath,
+        relative: rel_path,
+        speed: e.detail.speed,
+        total: e.detail.total || size,
+        type: 0,
+      });
+      downloadTasks.delete(id);
+    }) as EventListener);
 
-        response.on("data", async (chunk: Buffer) => {
-          downloadedBytes += chunk.length;
-          hash.update(chunk);
+    task.addEventListener("error", ((e: ErrorEvent) => {
+      console.error(`Download error for id ${id}:`, e.detail.error);
+      event.sender.send("channel.call", "download.onprocess", id, {
+        down: 0,
+        islast: true,
+        path: destPath,
+        relative: rel_path,
+        speed: 0,
+        total: size,
+        type: 1,
+      });
+      downloadTasks.delete(id);
+    }) as EventListener);
 
-          // Send progress update only if minimum interval has passed
-          const currentTime = Date.now();
-          const timeDiff = (currentTime - lastUpdateTime) / 1000;
+    downloadTasks.set(id, task);
+  }
+);
 
-          if (
-            timeDiff >= MIN_UPDATE_INTERVAL / 1000 ||
-            downloadedBytes === chunk.length
-          ) {
-            const bytesDiff = downloadedBytes - lastDownloadedBytes;
-            const instantSpeed = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+registerCallHandler<[string], void>(
+  "download.pause",
+  async (event, id: string) => {
+    const task = downloadTasks.get(id);
+    if (task) {
+      task.pause();
+    }
+  }
+);
 
-            // Apply exponential moving average for stability
-            smoothedSpeed =
-              smoothedSpeed === 0
-                ? instantSpeed
-                : EMA_ALPHA * instantSpeed + (1 - EMA_ALPHA) * smoothedSpeed;
+registerCallHandler<[string], void>(
+  "download.resume",
+  async (event, id: string) => {
+    const task = downloadTasks.get(id);
+    if (task) {
+      task.resume();
+    }
+  }
+);
 
-            const speed = smoothedSpeed;
-
-            const payload: DownloadProcessPayload = {
-              down: downloadedBytes,
-              islast: false,
-              path: destPath,
-              relative: rel_path,
-              speed,
-              total: size,
-              type: 0,
-            };
-
-            event.sender.send(
-              "channel.call",
-              "download.onprocess",
-              id,
-              payload
-            );
-
-            lastUpdateTime = currentTime;
-            lastDownloadedBytes = downloadedBytes;
-          }
-        });
-
-        response.pipe(writeStream);
-
-        await new Promise<void>((resolve, reject) => {
-          response.on("end", () => resolve());
-          response.on("error", (error) => reject(error));
-          writeStream.on("error", (error) => reject(error));
-        });
-
-        writeStream.close();
-
-        // Send final progress update with islast: true using accumulated average
-        const totalTime = (Date.now() - startTime) / 1000;
-        const finalSpeed =
-          totalTime > 0 ? downloadedBytes / totalTime : smoothedSpeed;
-
-        const finalPayload: DownloadProcessPayload = {
-          down: downloadedBytes,
-          islast: true,
-          path: destPath,
-          relative: rel_path,
-          speed: Math.max(smoothedSpeed, finalSpeed), // Use whichever is more reliable
-          total: size,
-          type: 0,
-        };
-
-        event.sender.send(
-          "channel.call",
-          "download.onprocess",
-          id,
-          finalPayload
-        );
-      } catch (error) {
-        console.error("Download failed for:", url, error);
-      }
-    })();
+registerCallHandler<[string], void>(
+  "download.cancel",
+  async (event, id: string) => {
+    const task = downloadTasks.get(id);
+    if (task) {
+      await task.cancel();
+      downloadTasks.delete(id);
+    }
   }
 );
