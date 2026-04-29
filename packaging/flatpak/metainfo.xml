@@ -59,6 +59,12 @@
   </screenshots>
 
   <releases>
+    <release version="0.7.0" date="2026-04-29">
+      <description>
+        <p>Supports local music library, local music playback and music downloading.</p>
+        <p xml:lang="zh-CN">支持本地音乐库、本地音乐播放、音乐下载</p>
+      </description>
+    </release>
     <release version="0.6.1" date="2026-04-26">
       <description>
         <p>Improved HTTP request mechanism. In hope of better performance and stability.</p>
