@@ -75,36 +75,46 @@ export type Playlist = {
 
 export type AudioPlayInfo = {
   playId: string;
-  songId: string;
   aiprocessorRatio: number;
-  audioFormat: string;
-  audioType: string;
-  bitrate: number;
-  br: string;
   destLevel: string;
-  expireTime: number;
-  extHeader: string;
-  fileSize: number;
-  format: unknown;
-  freeTrialInfo: unknown | null;
-  freeTrialPrivilege: {
-    resConsumable: boolean;
-    userConsumable: boolean;
-    listenType: unknown | null;
-    playReason: unknown | null;
-    cannotListenReason: unknown | null;
-    freeLimitTagType: unknown | null;
-  };
-  level: string;
-  md5: string;
-  playInfoStr: string;
-  podcastCtrp: unknown | null;
-  rightSource: number;
-  songDuration: string;
-  musicurl: string;
-  songQuality: string;
-  type: number;
-};
+  songId: string;
+  songQuality: "exhigh" | string;
+} & (
+  | {
+      type: 0;
+      bitrage: "exhigh" | string;
+      path: string;
+      playbrt: number;
+    }
+  | {
+      type: 4;
+      songId: string;
+      audioFormat: string;
+      audioType: string;
+      bitrate: number;
+      br: string;
+      expireTime: number;
+      extHeader: string;
+      fileSize: number;
+      format: unknown;
+      freeTrialInfo: unknown | null;
+      freeTrialPrivilege: {
+        resConsumable: boolean;
+        userConsumable: boolean;
+        listenType: unknown | null;
+        playReason: unknown | null;
+        cannotListenReason: unknown | null;
+        freeLimitTagType: unknown | null;
+      };
+      level: string;
+      md5: string;
+      playInfoStr: string;
+      podcastCtrp: unknown | null;
+      rightSource: number;
+      songDuration: string;
+      musicurl: string;
+    }
+);
 
 const DEFAULT_LYRIC_STYLE: LyricStyle = {
   lrcColorNotPlayedTop: "",
