@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
-import { existsSync, mkdirSync, watch } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 
 import { app } from "electron";
 import mime from "mime";
@@ -99,22 +99,6 @@ registerCallHandler<[string, string, string], [string, string]>(
     setDownloadPath(downloadDir);
     setCachePath(cacheDir);
     createCacheManager();
-
-    watch(downloadDir, { recursive: true }, async (eventType, filename) => {
-      if (!filename) return;
-      const filePath = join(downloadDir, filename);
-      if (
-        existsSync(filePath) &&
-        (await stat(filePath).then((s) => s.isFile()))
-      ) {
-        const info = await readDownloadedMusicInfo(filename, downloadDir);
-        if (info) {
-          event.sender.send("channel.call", "storage.ondownloadscanner", [
-            info,
-          ]);
-        }
-      }
-    });
 
     return [downloadDir, cacheDir];
   }
@@ -237,10 +221,12 @@ registerCallHandler<
 registerCallHandler<[string, { id: string; path: string }[], string], void>(
   "storage.checkFilesExist",
   async (event, taskId, files, basePath) => {
-    const results = files.map(async (file) => {
-      const filePath = normalizePath(basePath, file.path);
-      return { id: file.id, exists: existsSync(filePath) };
-    });
+    const results = await Promise.all(
+      files.map(async (file) => {
+        const filePath = normalizePath(basePath, file.path);
+        return { id: file.id, exists: existsSync(filePath) };
+      })
+    );
     event.sender.send(
       "channel.call",
       "storage.oncheckfilesexist",
@@ -251,30 +237,57 @@ registerCallHandler<[string, { id: string; path: string }[], string], void>(
   }
 );
 
-// Reply with `storage.ondownloadscanner`
-// - array of `DownloadScannerItem`
-registerCallHandler<
-  [string, boolean, string, number, string[]],
-  [DownloadScannerItem[]]
->(
+// Fires `storage.ondownloadscanner` progressively with batches of
+// `DownloadScannerItem[]` up to `limit` items per batch.
+registerCallHandler<[string, boolean, string, number, string[]], void>(
   "storage.downloadscanner",
-  async (event, path, falseBool, emptyStr, limit, excludes) => {
-    const files = await readdir(path);
-    const items: DownloadScannerItem[] = [];
-    const excludeFiles = excludes.map((p) => normalizePath(path, p));
-    await Promise.all(
-      files
-        .filter((file) => !excludeFiles.includes(normalizePath(path, file)))
-        .slice(0, limit)
-        .map(async (file) => {
-          const filePath = join(path, file);
-          if (existsSync(filePath) && (await stat(filePath)).isFile()) {
-            const info = await readDownloadedMusicInfo(file, path);
-            if (info) items.push(info);
+  (event, path, recursive, emptyStr, limit, excludes) => {
+    (async () => {
+      const excludeSet = new Set(excludes.map((p) => normalizePath(path, p)));
+      const batch: DownloadScannerItem[] = [];
+
+      const flush = () => {
+        if (batch.length > 0) {
+          event.sender.send(
+            "channel.call",
+            "storage.ondownloadscanner",
+            batch.splice(0)
+          );
+        }
+      };
+
+      const scanDir = async (dir: string) => {
+        let entries;
+        try {
+          entries = await readdir(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            if (recursive) await scanDir(join(dir, entry.name));
+            continue;
           }
-        })
-    );
-    return [items];
+          const relPath = normalizePath(path, join(dir, entry.name));
+          if (excludeSet.has(relPath)) continue;
+
+          const info = await readDownloadedMusicInfo(relPath, path);
+          if (!info) continue;
+
+          batch.push(info);
+          if (batch.length >= limit) flush();
+        }
+      };
+
+      try {
+        await scanDir(path);
+        flush();
+      } catch (err) {
+        console.error(
+          `DownloadScanner: scanner path ${path}: ${stringifyError(err)}`
+        );
+      }
+    })();
   }
 );
 
