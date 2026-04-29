@@ -1,5 +1,5 @@
 import { existsSync, watch, type FSWatcher } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
@@ -166,17 +166,26 @@ registerCallHandler<[MusicLibraries], void>(
   }
 );
 
-// TODO: Library adding handling
 registerCallHandler<[MusicLibraries, number], [boolean]>(
   "musiclibrary.addLibrary",
-  (event, library) => {
-    // TODO: Scan the library
-    event.sender.send("channel.call", "musiclibrary.onaddend", {
-      dirs: [""],
-      library,
-      reason: "",
-      result: 0,
-    });
+  async (_event, library) => {
+    const libPath = getLibraryPath(library);
+    if (!libPath) return [true];
+    const db = getMusicLibraryDb();
+
+    const entries = await readdir(libPath, { recursive: true });
+    for (const relative of entries) {
+      if (!(await isMusicFile(relative))) continue;
+      const filePath = path.join(libPath, relative);
+      const entry = await trackEntryFromFile(library, filePath);
+      db.exec("DELETE FROM track WHERE file = ?", [filePath]);
+      db.execNamed(
+        `INSERT INTO track (file, tid, aid, dir, title, album, genre, artist, duration, timestamp, bitrate, filesize, ignored, id, artistid, parentdir, track, librarypath, tracknumber, source, starttime, type)
+         VALUES (:file, :tid, :aid, :dir, :title, :album, :genre, :artist, :duration, :timestamp, :bitrate, :filesize, :ignored, :id, :artistid, :parentdir, :track, :librarypath, :tracknumber, :source, :starttime, :type)`,
+        entry
+      );
+    }
+
     return [true];
   }
 );
