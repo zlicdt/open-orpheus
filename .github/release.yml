@@ -1,0 +1,17 @@
+changelog:
+  exclude:
+    labels:
+      - release/ignore
+  categories:
+    - title: 兼容性修复 / Compatibility Fixes 🔨
+      labels:
+        - implementation
+    - title: 新功能 / New features ✨
+      labels:
+        - enhancement
+    - title: BUG修复 / Bug Fixes 🐛
+      labels:
+        - bug
+    - title: 其他修改 / Other Changes 🧹
+      labels:
+        - "*"
