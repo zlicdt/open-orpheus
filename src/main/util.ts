@@ -10,20 +10,23 @@ export async function pngFromIco(icoData: Uint8Array): Promise<Uint8Array> {
   return pngData;
 }
 
+export function normalizePath(...paths: string[]): string {
+  return normalize(
+    join(
+      ...paths.map((path) =>
+        os.platform() === "win32" ? path : path.replaceAll("\\", "/")
+      )
+    )
+  );
+}
+
 export function sanitizeRelativePath(
   base: string,
   path: string
 ): string | false {
   const resolvedBase = resolve(base);
-  const normalizedPath = normalize(path);
-  const resolvedPath = resolve(
-    join(
-      resolvedBase,
-      os.platform() === "win32"
-        ? normalizedPath
-        : normalizedPath.replaceAll("\\", "/")
-    )
-  );
+  const normalizedPath = normalizePath(path);
+  const resolvedPath = resolve(join(resolvedBase, normalizedPath));
   if (!resolvedPath.startsWith(resolvedBase)) {
     return false;
   }

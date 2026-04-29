@@ -1,17 +1,29 @@
-import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, extname, join, resolve } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 
 import { app } from "electron";
+import mime from "mime";
+import { MetaPicture, MusicTagger } from "music-tag-native";
 
 import {
   data as dataDir,
   defaultCache,
+  download,
+  downloadTemp,
   setCachePath,
   setDownloadPath,
 } from "../folders";
 import { registerCallHandler } from "../calls";
-import { sanitizeRelativePath } from "../util";
+import { isMusicFile, normalizePath, sanitizeRelativePath } from "../util";
 import { getWebDb } from "../database";
 import {
   CacheTrackMeta,
@@ -23,6 +35,55 @@ import createCacheManager, {
   playCacheManager,
 } from "../cache";
 import { stringifyError } from "../../util";
+import { deData, enData, ID3_AES_KEY } from "../crypto";
+
+const ID3_COMMENT_PREFIX = "163 key(Don't modify):";
+
+type DownloadScannerItem = {
+  comment: string; // comment added by addid3
+  creation_time: number; // timestamp
+  last_accessed: number;
+  last_modified: number;
+  path: string; // path relative to download dir
+  size: number;
+};
+
+async function readDownloadedMusicInfo(
+  file: string,
+  base: string | undefined = undefined
+): Promise<DownloadScannerItem | undefined> {
+  const filePath = normalizePath(base ?? "", file);
+  let comment = "";
+  try {
+    const tagger = new MusicTagger();
+    tagger.loadPath(filePath);
+    if (!tagger.comment || !tagger.comment.startsWith(ID3_COMMENT_PREFIX)) {
+      tagger.dispose();
+      return;
+    }
+    const decryptedComment = deData(
+      tagger.comment.slice(ID3_COMMENT_PREFIX.length),
+      ID3_AES_KEY,
+      false
+    );
+    tagger.dispose();
+    if (!decryptedComment) return;
+    comment = decryptedComment ? decryptedComment.toString("utf-8") : "";
+  } catch (error) {
+    console.error(
+      `Error reading ID3 tags from ${filePath}: ${stringifyError(error)}`
+    );
+  }
+  const statResult = await stat(filePath);
+  return {
+    comment,
+    creation_time: statResult.birthtimeMs,
+    last_accessed: statResult.atimeMs,
+    last_modified: statResult.mtimeMs,
+    path: file,
+    size: statResult.size,
+  };
+}
 
 registerCallHandler<[string, string, string], [string, string]>(
   "storage.init",
@@ -38,6 +99,7 @@ registerCallHandler<[string, string, string], [string, string]>(
     setDownloadPath(downloadDir);
     setCachePath(cacheDir);
     createCacheManager();
+
     return [downloadDir, cacheDir];
   }
 );
@@ -136,7 +198,7 @@ registerCallHandler<
       }
       filePath = p;
     } else {
-      filePath = path;
+      filePath = normalizePath(path);
     }
 
     await mkdir(dirname(filePath), { recursive: true });
@@ -159,10 +221,12 @@ registerCallHandler<
 registerCallHandler<[string, { id: string; path: string }[], string], void>(
   "storage.checkFilesExist",
   async (event, taskId, files, basePath) => {
-    const results = files.map(async (file) => {
-      const filePath = join(basePath, file.path);
-      return { id: file.id, exists: existsSync(filePath) };
-    });
+    const results = await Promise.all(
+      files.map(async (file) => {
+        const filePath = normalizePath(basePath, file.path);
+        return { id: file.id, exists: existsSync(filePath) };
+      })
+    );
     event.sender.send(
       "channel.call",
       "storage.oncheckfilesexist",
@@ -173,22 +237,55 @@ registerCallHandler<[string, { id: string; path: string }[], string], void>(
   }
 );
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type DownloadScannerItem = {
-  comment: string; // comment added by addid3
-  creation_time: number; // timestamp
-  last_accessed: number;
-  last_modified: number;
-  path: string; // path relative to download dir
-  size: number;
-};
-// Reply with `storage.ondownloadscanner`
-// - array of `DownloadScannerItem`
+// Fires `storage.ondownloadscanner` progressively with batches of
+// `DownloadScannerItem[]` up to `limit` items per batch.
 registerCallHandler<[string, boolean, string, number, string[]], void>(
   "storage.downloadscanner",
-  (event) => {
-    // TODO: Scan download dir for downloaded music
-    event.sender.send("channel.call", "storage.ondownloadscanner", []);
+  (event, path, recursive, emptyStr, limit, excludes) => {
+    (async () => {
+      const excludeSet = new Set(excludes.map((p) => normalizePath(path, p)));
+      const batch: DownloadScannerItem[] = [];
+
+      const entries = await readdir(path, {
+        recursive: true,
+        withFileTypes: true,
+      });
+
+      const flush = () => {
+        if (batch.length > 0) {
+          event.sender.send(
+            "channel.call",
+            "storage.ondownloadscanner",
+            batch.splice(0)
+          );
+        }
+      };
+
+      try {
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            continue;
+          }
+
+          if (!(await isMusicFile(entry.name))) continue;
+
+          const fullPath = normalizePath(path, join(path, entry.name));
+          if (excludeSet.has(fullPath)) continue;
+
+          const info = await readDownloadedMusicInfo(entry.name, path);
+          if (!info) continue;
+
+          batch.push(info);
+          if (batch.length >= limit) flush();
+        }
+
+        flush();
+      } catch (err) {
+        console.error(
+          `DownloadScanner: scanner path ${path}: ${stringifyError(err)}`
+        );
+      }
+    })();
   }
 );
 
@@ -341,22 +438,69 @@ registerCallHandler<[string, "abs" | "rel", "", string], void>(
 );
 
 type AddId3Request = {
-  encrypt: boolean;
+  encrypt: boolean; // Should use .ncm format
   image_rel_path: string;
   media_rel_path: string;
   talb: string; // Track album
   tit2: string; // Track title
   tpe1: string; // Track artists
-  tpos: string; // Track number? "01"
-  trck: string; // Track number? "1"
+  tpos: string; // Disc number
+  trck: string; // Track pos
 };
-// `mediaInfo` is saved to comment, with encryption
+// `mediaInfo` is saved to comment, with encryption (enData using its own key), prefixed with `163 key(Don't modify):`
 // Reply with `storage.onaddid3done`
 // - taskId
 // - code? 1
 // - final media path relative to download path
 registerCallHandler<[string, string, string, string, AddId3Request], void>(
   "storage.addid3",
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {}
+  (event, taskId, mediaPath, imagePath, mediaInfo, id3Info) => {
+    // Don't block the call.
+    (async () => {
+      const tagger = new MusicTagger();
+
+      mediaPath = normalizePath(mediaPath);
+
+      tagger.loadPath(mediaPath);
+
+      tagger.album = id3Info.talb;
+      tagger.title = id3Info.tit2;
+      tagger.artist = id3Info.tpe1;
+      tagger.discNumber = parseInt(id3Info.tpos) || 0;
+      tagger.trackNumber = parseInt(id3Info.trck) || 0;
+
+      const imageFullPath = normalizePath(downloadTemp, imagePath);
+      if (existsSync(imageFullPath)) {
+        const mimeType = mime.getType(imageFullPath);
+        if (mimeType) {
+          const imageData = await readFile(imageFullPath);
+          tagger.pictures = [new MetaPicture(mimeType, imageData)];
+        }
+      }
+
+      tagger.comment = `${ID3_COMMENT_PREFIX}${enData(mediaInfo, ID3_AES_KEY, false)}`;
+
+      let relPath = id3Info.media_rel_path;
+      if (relPath.endsWith(".ncm")) {
+        // Current we don't know what's .ncm format, just rename to the original extension
+        const originalExt = extname(mediaPath);
+        relPath = relPath.slice(0, -4) + originalExt;
+      }
+
+      tagger.save(normalizePath(download, id3Info.media_rel_path));
+
+      tagger.dispose();
+
+      await rm(imageFullPath);
+      await rm(mediaPath);
+
+      event.sender.send(
+        "channel.call",
+        "storage.onaddid3done",
+        taskId,
+        1,
+        relPath
+      );
+    })();
+  }
 );
