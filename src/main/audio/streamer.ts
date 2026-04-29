@@ -1,4 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
+import { readFile } from "node:fs/promises";
+
+import mime from "mime";
 
 import type { AudioPlayInfo } from "../../preload/Player";
 import client from "../request";
@@ -296,6 +299,23 @@ export default class AudioStreamer extends EventTarget {
         status: 404,
       });
     }
+
+    if (this.currentAudioPlayInfo.type !== 4) {
+      // Local music, simply read from disk and return (no range support)
+      const buf = await readFile(this.currentAudioPlayInfo.path);
+      this.onProgress(1);
+      this.onComplete();
+      return new Response(buf, {
+        status: 200,
+        headers: {
+          "Content-Type":
+            mime.getType(this.currentAudioPlayInfo.path) ||
+            "application/octet-stream",
+          "Content-Length": String(buf.length),
+        },
+      });
+    }
+
     const url = this.currentAudioPlayInfo.musicurl;
     const rangeHeader = request.headers.get("range");
 

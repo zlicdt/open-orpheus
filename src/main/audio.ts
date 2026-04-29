@@ -8,6 +8,7 @@ import AudioStreamer from "./audio/streamer";
 import type { AudioPlayInfo } from "../preload/Player";
 import { mainWindow } from "./window";
 import { playCacheManager } from "./cache";
+import { normalizePath } from "./util";
 
 const audioStreamer = new AudioStreamer();
 
@@ -18,7 +19,7 @@ audioStreamer.addEventListener("progress", ((e: CustomEvent<number>) => {
 audioStreamer.addEventListener("complete", () => {
   const sb = audioStreamer.buffer;
   const playInfo = audioStreamer.audioPlayInfo;
-  if (!sb || !playInfo) return;
+  if (!sb || !playInfo || playInfo.type !== 4) return;
 
   playCacheManager
     ?.cacheTrack(sb.songId, sb.buffer, {
@@ -34,6 +35,9 @@ audioStreamer.addEventListener("complete", () => {
 });
 
 ipcMain.on("audio.updatePlayInfo", (event, playInfo: AudioPlayInfo | null) => {
+  if (playInfo && playInfo.type === 0) {
+    playInfo.path = normalizePath(playInfo.path);
+  }
   audioStreamer.setPlayInfo(playInfo);
   event.returnValue = undefined;
 });
