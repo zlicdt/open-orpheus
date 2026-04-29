@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import os from "node:os";
 
 import { BrowserWindow, powerSaveBlocker, screen, shell } from "electron";
@@ -11,7 +12,7 @@ import { getADDeviceId, getDeviceId } from "../device";
 import { statfs } from "node:fs/promises";
 
 registerCallHandler<[string], [boolean]>("os.isFileExist", (event, path) => {
-  const filePath = sanitizeRelativePath("data", path);
+  const filePath = isAbsolute(path) ? path : sanitizeRelativePath("data", path);
   if (filePath === false) return [false];
   return [existsSync(filePath)];
 });
