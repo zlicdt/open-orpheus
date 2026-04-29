@@ -24,6 +24,16 @@ declare module "./load.cjs" {
   ): {
     value: unknown[] | undefined;
   };
+  function exec(
+    ptr: number,
+    sql: string,
+    parameters: (string | number | boolean | null)[]
+  ): [number, Record<string, string>[], [number, number, number]];
+  function execNamed(
+    ptr: number,
+    sql: string,
+    parameters: Record<string, string | number | boolean | null>
+  ): [number, Record<string, string>[], [number, number, number]];
   function closeConnection(ptr: number): boolean;
 }
 
@@ -60,6 +70,26 @@ export default class Database {
       throw new Error("Database connection is closed.");
     }
     return addon.executeSqls(this._ptr, sqls);
+  }
+
+  exec(
+    sql: string,
+    parameters: (string | number | boolean | null)[] = []
+  ): ReturnType<typeof addon.exec> {
+    if (this._ptr === 0) {
+      throw new Error("Database connection is closed.");
+    }
+    return addon.exec(this._ptr, sql, parameters);
+  }
+
+  execNamed(
+    sql: string,
+    parameters: Record<string, string | number | boolean | null>
+  ): ReturnType<typeof addon.execNamed> {
+    if (this._ptr === 0) {
+      throw new Error("Database connection is closed.");
+    }
+    return addon.execNamed(this._ptr, sql, parameters);
   }
 
   close(): boolean {
