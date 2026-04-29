@@ -23,7 +23,7 @@ import {
   setDownloadPath,
 } from "../folders";
 import { registerCallHandler } from "../calls";
-import { normalizePath, sanitizeRelativePath } from "../util";
+import { isMusicFile, normalizePath, sanitizeRelativePath } from "../util";
 import { getWebDb } from "../database";
 import {
   CacheTrackMeta,
@@ -246,6 +246,11 @@ registerCallHandler<[string, boolean, string, number, string[]], void>(
       const excludeSet = new Set(excludes.map((p) => normalizePath(path, p)));
       const batch: DownloadScannerItem[] = [];
 
+      const entries = await readdir(path, {
+        recursive: true,
+        withFileTypes: true,
+      });
+
       const flush = () => {
         if (batch.length > 0) {
           event.sender.send(
@@ -256,31 +261,24 @@ registerCallHandler<[string, boolean, string, number, string[]], void>(
         }
       };
 
-      const scanDir = async (dir: string) => {
-        let entries;
-        try {
-          entries = await readdir(dir, { withFileTypes: true });
-        } catch {
-          return;
-        }
+      try {
         for (const entry of entries) {
           if (entry.isDirectory()) {
-            if (recursive) await scanDir(join(dir, entry.name));
             continue;
           }
-          const relPath = normalizePath(path, join(dir, entry.name));
-          if (excludeSet.has(relPath)) continue;
 
-          const info = await readDownloadedMusicInfo(relPath, path);
+          if (!(await isMusicFile(entry.name))) continue;
+
+          const fullPath = normalizePath(path, join(path, entry.name));
+          if (excludeSet.has(fullPath)) continue;
+
+          const info = await readDownloadedMusicInfo(entry.name, path);
           if (!info) continue;
 
           batch.push(info);
           if (batch.length >= limit) flush();
         }
-      };
 
-      try {
-        await scanDir(path);
         flush();
       } catch (err) {
         console.error(
