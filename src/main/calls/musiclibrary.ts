@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 
 import { app } from "electron";
+import { MusicTagger } from "music-tag-native";
 
 import { getMusicLibraryDb } from "../database";
 import { registerCallHandler } from "../calls";
@@ -68,20 +69,31 @@ async function trackEntryFromFile(
 ): Promise<TrackEntry> {
   const fstat = await stat(file);
 
-  // TODO: Read ID3
+  const tagger = new MusicTagger();
+  tagger.loadPath(file);
+
+  const title = tagger.title || path.basename(file, path.extname(file));
+  const album = tagger.album || "";
+  const genre = tagger.genre || "";
+  const artist = tagger.artist || "";
+  const duration = tagger.duration || 0;
+  const bitrate = tagger.bitRate || 0;
+  const tracknumber = tagger.trackNumber || 0;
+
+  tagger.dispose();
 
   return {
     file,
     tid: "",
     aid: "",
     dir: lib,
-    title: path.basename(file, path.extname(file)),
-    album: "",
-    genre: "",
-    artist: "",
-    duration: 0,
+    title,
+    album,
+    genre,
+    artist,
+    duration,
     timestamp: Date.now(),
-    bitrate: 0,
+    bitrate,
     filesize: fstat.size,
     ignored: 0,
     id: generateTrackId(file),
@@ -89,7 +101,7 @@ async function trackEntryFromFile(
     parentdir: path.dirname(file),
     track: "",
     librarypath: getLibraryPath(lib) || "",
-    tracknumber: 0,
+    tracknumber,
     source: "",
     starttime: 0,
     type: 0,

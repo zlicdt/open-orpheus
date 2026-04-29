@@ -25,6 +25,7 @@ export default defineConfig({
       external: [
         // Native/WASM Modules
         "7z-wasm",
+        "music-tag-native",
         "@silvia-odwyer/photon-node",
         "@open-orpheus/database",
         "@open-orpheus/window",
