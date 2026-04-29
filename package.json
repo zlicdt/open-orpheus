@@ -70,7 +70,7 @@
     "@open-orpheus/window": "workspace:*",
     "@silvia-odwyer/photon-node": "^0.3.4",
     "electron-squirrel-startup": "^1.0.1",
-    "music-tag-native": "^0.2.3"
+    "music-tag-native": "^0.2.4"
   },
   "optionalDependencies": {
     "@malept/electron-installer-flatpak": "^0.11.4",

@@ -62,3 +62,8 @@ export function getWindowScaleFactor(wnd: BrowserWindow): number {
   const bounds = wnd.getBounds();
   return screen.getDisplayMatching(bounds).scaleFactor;
 }
+
+export async function isMusicFile(fileOrPath: string): Promise<boolean> {
+  const mime = await import("mime");
+  return mime.default.getType(fileOrPath)?.startsWith("audio/") || false;
+}

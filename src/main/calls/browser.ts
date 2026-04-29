@@ -58,7 +58,16 @@ registerCallHandler<[SetCookie], [boolean]>(
   "browser.setCookie",
   async (_, cookie) => {
     try {
-      await setCookie(cookie.Url, {
+      const url = new URL(cookie.Url);
+      const targetDomain = cookie.Domain.startsWith(".")
+        ? cookie.Domain.slice(1)
+        : cookie.Domain;
+      if (url.hostname !== targetDomain) {
+        // We expect this API can set the cookie no matter the URL's hostname, so we override it,
+        // otherwise Electron will reject it.
+        url.hostname = targetDomain;
+      }
+      await setCookie(url.toString(), {
         name: cookie.Name,
         value: cookie.Value,
         domain: cookie.Domain,
