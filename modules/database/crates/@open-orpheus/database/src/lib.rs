@@ -8,12 +8,12 @@ use neon::{
     object::Object,
     prelude::{Context, Cx},
     result::{JsResult, ResultExt},
-    types::{JsArray, JsNumber, JsObject, JsString, JsValue},
+    types::{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsUndefined, JsValue},
 };
 use std::cmp::Ordering;
 
 use pinyin::ToPinyin;
-use rusqlite::{Batch, Connection, fallible_iterator::FallibleIterator};
+use rusqlite::{Batch, Connection, fallible_iterator::FallibleIterator, types::Value};
 
 #[neon::export]
 fn create_connection<'cx>(cx: &mut Cx<'cx>, path: String) -> JsResult<'cx, JsNumber> {
@@ -61,6 +61,221 @@ fn value_ref_to_js_string<'cx>(
         rusqlite::types::ValueRef::Text(t) => cx.string(std::str::from_utf8(t).unwrap()),
         rusqlite::types::ValueRef::Blob(b) => cx.string(format!("{:?}", b)),
     }
+}
+
+fn js_to_rusqlite_value<'cx>(
+    cx: &mut Cx<'cx>,
+    val: Handle<JsValue>,
+) -> Result<Value, neon::result::Throw> {
+    if val.is_a::<JsNull, _>(cx) || val.is_a::<JsUndefined, _>(cx) {
+        return Ok(Value::Null);
+    }
+    if val.is_a::<JsString, _>(cx) {
+        let s = val.downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
+        return Ok(Value::Text(s));
+    }
+    if val.is_a::<JsNumber, _>(cx) {
+        let n = val.downcast::<JsNumber, _>(cx).or_throw(cx)?.value(cx);
+        if n == (n as i64) as f64 && n.is_finite() {
+            return Ok(Value::Integer(n as i64));
+        }
+        return Ok(Value::Real(n));
+    }
+    if val.is_a::<JsBoolean, _>(cx) {
+        let b = val.downcast::<JsBoolean, _>(cx).or_throw(cx)?.value(cx);
+        return Ok(Value::Integer(if b { 1 } else { 0 }));
+    }
+    Ok(Value::Null)
+}
+
+/// Execute a single SQL statement with named parameters.
+#[neon::export]
+fn exec_named<'cx>(
+    cx: &mut Cx<'cx>,
+    ptr: f64,
+    sql: String,
+    parameters: Handle<JsObject>,
+) -> JsResult<'cx, JsArray> {
+    let conn = unsafe { &mut *(ptr as usize as *mut Connection) };
+
+    let keys_arr = parameters.get_own_property_names(cx)?;
+    let keys = keys_arr.to_vec(cx)?;
+    let mut param_values: Vec<(String, Value)> = Vec::with_capacity(keys.len());
+
+    for key_handle in keys {
+        let raw_key = key_handle
+            .downcast::<JsString, _>(cx)
+            .or_throw(cx)?
+            .value(cx);
+        let key =
+            if raw_key.starts_with(':') || raw_key.starts_with('@') || raw_key.starts_with('$') {
+                raw_key
+            } else {
+                format!(":{}", raw_key)
+            };
+        let val = parameters.get_value(cx, key_handle)?;
+        let rusqlite_val = js_to_rusqlite_value(cx, val)?;
+        param_values.push((key, rusqlite_val));
+    }
+
+    let param_refs: Vec<(&str, &dyn rusqlite::types::ToSql)> = param_values
+        .iter()
+        .map(|(k, v)| (k.as_str(), v as &dyn rusqlite::types::ToSql))
+        .collect();
+
+    let t0 = Instant::now();
+
+    let mut stmt = conn.prepare(&sql).or_else(|e| {
+        let err_msg = cx.string(format!("Failed to prepare SQL: {}", e));
+        cx.throw(err_msg)
+    })?;
+
+    let column_count = stmt.column_count();
+    let mut column_names = Vec::with_capacity(column_count);
+    for i in 0..column_count {
+        let Ok(name) = stmt.column_name(i) else {
+            let err_msg = cx.string(format!("Failed to get column name for index: {}", i));
+            return cx.throw(err_msg);
+        };
+        column_names.push(name.to_string());
+    }
+
+    let t1 = Instant::now();
+    let prev_changes = conn.total_changes();
+
+    let mut rows = match stmt.query(&param_refs[..]) {
+        Ok(rows) => rows,
+        Err(e) => {
+            let err_msg = cx.string(format!("Failed to execute SQL: {} - error: {}", sql, e));
+            return cx.throw(err_msg);
+        }
+    };
+
+    let mut results = Vec::new();
+    while let Ok(Some(row)) = rows.next() {
+        let row_obj = cx.empty_object();
+        for (i, col_name) in column_names.iter().enumerate() {
+            let val = row.get_ref(i).unwrap();
+            let name = cx.string(col_name.as_str());
+            let js_val = value_ref_to_js_string(cx, val);
+            row_obj.prop(cx, name).set(js_val).unwrap();
+        }
+        results.push(row_obj);
+    }
+
+    let t2 = Instant::now();
+    let row_affected = conn.total_changes() - prev_changes;
+
+    let result = cx.empty_array();
+    result.prop(cx, 0).set(0).unwrap();
+
+    let result_rows = cx.empty_array();
+    if results.is_empty() {
+        let val = cx.undefined();
+        result.prop(cx, 1).set(val).unwrap();
+    } else {
+        for (i, row) in results.into_iter().enumerate() {
+            result_rows.prop(cx, i as u32).set(row).unwrap();
+        }
+        result.prop(cx, 1).set(result_rows).unwrap();
+    }
+
+    let perf = cx.empty_array();
+    perf.prop(cx, 0).set((t2 - t0).as_millis() as u32).unwrap();
+    perf.prop(cx, 1).set((t1 - t0).as_millis() as u32).unwrap();
+    perf.prop(cx, 2).set(row_affected as f64).unwrap();
+    let result_len = result.len(cx);
+    result.prop(cx, result_len).set(perf).unwrap();
+
+    Ok(result)
+}
+
+/// Execute a single SQL statement with positional (`?`) parameters.
+#[neon::export]
+fn exec<'cx>(
+    cx: &mut Cx<'cx>,
+    ptr: f64,
+    sql: String,
+    parameters: Handle<JsArray>,
+) -> JsResult<'cx, JsArray> {
+    let conn = unsafe { &mut *(ptr as usize as *mut Connection) };
+
+    let arr = parameters.to_vec(cx)?;
+    let mut param_values: Vec<Value> = Vec::with_capacity(arr.len());
+    for item in arr {
+        param_values.push(js_to_rusqlite_value(cx, item)?);
+    }
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+        .iter()
+        .map(|v| v as &dyn rusqlite::types::ToSql)
+        .collect();
+
+    let t0 = Instant::now();
+
+    let mut stmt = conn.prepare(&sql).or_else(|e| {
+        let err_msg = cx.string(format!("Failed to prepare SQL: {}", e));
+        cx.throw(err_msg)
+    })?;
+
+    let column_count = stmt.column_count();
+    let mut column_names = Vec::with_capacity(column_count);
+    for i in 0..column_count {
+        let Ok(name) = stmt.column_name(i) else {
+            let err_msg = cx.string(format!("Failed to get column name for index: {}", i));
+            return cx.throw(err_msg);
+        };
+        column_names.push(name.to_string());
+    }
+
+    let t1 = Instant::now();
+    let prev_changes = conn.total_changes();
+
+    let mut rows = match stmt.query(&param_refs[..]) {
+        Ok(rows) => rows,
+        Err(e) => {
+            let err_msg = cx.string(format!("Failed to execute SQL: {} - error: {}", sql, e));
+            return cx.throw(err_msg);
+        }
+    };
+
+    let mut results = Vec::new();
+    while let Ok(Some(row)) = rows.next() {
+        let row_obj = cx.empty_object();
+        for (i, col_name) in column_names.iter().enumerate() {
+            let val = row.get_ref(i).unwrap();
+            let name = cx.string(col_name.as_str());
+            let js_val = value_ref_to_js_string(cx, val);
+            row_obj.prop(cx, name).set(js_val).unwrap();
+        }
+        results.push(row_obj);
+    }
+
+    let t2 = Instant::now();
+    let row_affected = conn.total_changes() - prev_changes;
+
+    let result = cx.empty_array();
+    result.prop(cx, 0).set(0).unwrap();
+
+    let result_rows = cx.empty_array();
+    if results.is_empty() {
+        let val = cx.undefined();
+        result.prop(cx, 1).set(val).unwrap();
+    } else {
+        for (i, row) in results.into_iter().enumerate() {
+            result_rows.prop(cx, i as u32).set(row).unwrap();
+        }
+        result.prop(cx, 1).set(result_rows).unwrap();
+    }
+
+    let perf = cx.empty_array();
+    perf.prop(cx, 0).set((t2 - t0).as_millis() as u32).unwrap();
+    perf.prop(cx, 1).set((t1 - t0).as_millis() as u32).unwrap();
+    perf.prop(cx, 2).set(row_affected as f64).unwrap();
+    let result_len = result.len(cx);
+    result.prop(cx, result_len).set(perf).unwrap();
+
+    Ok(result)
 }
 
 /// Execute SQL string, returns an array of objects representing rows,

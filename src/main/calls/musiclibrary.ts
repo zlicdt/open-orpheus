@@ -7,6 +7,7 @@ import { app } from "electron";
 
 import { getMusicLibraryDb } from "../database";
 import { registerCallHandler } from "../calls";
+import { isMusicFile } from "../util";
 
 type MusicLibraries =
   | "<mymusic>"
@@ -132,13 +133,19 @@ registerCallHandler<[MusicLibraries], void>(
       { recursive: true },
       async (eventType, filename) => {
         if (!filename) return;
+        if (!(await isMusicFile(filename))) return;
         const filePath = path.join(libPath, filename);
+        const db = getMusicLibraryDb();
         if (existsSync(filePath)) {
           const entry = await trackEntryFromFile(lib, filePath);
-          console.log("Adding entry", entry, "to `track` table");
-          // TODO: Add to SQLite DB
+          db.exec("DELETE FROM track WHERE file = ?", [filePath]);
+          db.execNamed(
+            `INSERT INTO track (file, tid, aid, dir, title, album, genre, artist, duration, timestamp, bitrate, filesize, ignored, id, artistid, parentdir, track, librarypath, tracknumber, source, starttime, type)
+             VALUES (:file, :tid, :aid, :dir, :title, :album, :genre, :artist, :duration, :timestamp, :bitrate, :filesize, :ignored, :id, :artistid, :parentdir, :track, :librarypath, :tracknumber, :source, :starttime, :type)`,
+            entry
+          );
         } else {
-          // TODO: Remove from SQLite DB
+          db.exec("DELETE FROM track WHERE file = ?", [filePath]);
         }
         event.sender.send("channel.call", "musiclibrary.onobserveLibrary", {
           library: lib,
@@ -163,7 +170,7 @@ registerCallHandler<[MusicLibraries], void>(
 registerCallHandler<[MusicLibraries, number], [boolean]>(
   "musiclibrary.addLibrary",
   (event, library) => {
-    // TODO?: Scan the library
+    // TODO: Scan the library
     event.sender.send("channel.call", "musiclibrary.onaddend", {
       dirs: [""],
       library,
