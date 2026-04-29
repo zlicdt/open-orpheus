@@ -482,13 +482,14 @@ registerCallHandler<[string, string, string, string, AddId3Request], void>(
 
       tagger.comment = `${ID3_COMMENT_PREFIX}${enData(mediaInfo, ID3_AES_KEY, false)}`;
 
-      let finalPath = normalizePath(download, id3Info.media_rel_path);
-      if (finalPath.endsWith(".ncm")) {
+      let relPath = id3Info.media_rel_path;
+      if (relPath.endsWith(".ncm")) {
         // Current we don't know what's .ncm format, just rename to the original extension
         const originalExt = extname(mediaPath);
-        finalPath = finalPath.slice(0, -4) + originalExt;
+        relPath = relPath.slice(0, -4) + originalExt;
       }
-      tagger.save(finalPath);
+
+      tagger.save(normalizePath(download, id3Info.media_rel_path));
 
       tagger.dispose();
 
@@ -500,7 +501,7 @@ registerCallHandler<[string, string, string, string, AddId3Request], void>(
         "storage.onaddid3done",
         taskId,
         1,
-        id3Info.media_rel_path
+        relPath
       );
     })();
   }
