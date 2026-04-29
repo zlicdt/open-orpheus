@@ -10,6 +10,9 @@ use neon::{
     result::{JsResult, ResultExt},
     types::{JsArray, JsNumber, JsObject, JsString, JsValue},
 };
+use std::cmp::Ordering;
+
+use pinyin::ToPinyin;
 use rusqlite::{Batch, Connection, fallible_iterator::FallibleIterator};
 
 #[neon::export]
@@ -18,8 +21,33 @@ fn create_connection<'cx>(cx: &mut Cx<'cx>, path: String) -> JsResult<'cx, JsNum
         let err_msg = JsString::new(cx, "Failed to create database connection");
         return cx.throw(err_msg);
     };
+
+    // Register custom collations so SQL referencing COLLATE pinyin_desc / pinyin_asc works.
+    let _ = conn.create_collation("pinyin_desc", |a: &str, b: &str| -> Ordering {
+        compare_pinyin(a, b).reverse()
+    });
+    let _ = conn.create_collation("pinyin_asc", compare_pinyin);
+
     let ptr = Box::into_raw(Box::new(conn));
     Ok(JsNumber::new(cx, ptr as usize as f64))
+}
+
+/// Convert a string to its pinyin representation for comparison.
+/// Chinese characters become their pinyin reading; non-Chinese characters pass through unchanged.
+fn to_pinyin_for_cmp(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 6);
+    for (ch, py) in s.chars().zip(s.to_pinyin()) {
+        match py {
+            Some(p) => result.push_str(p.plain()),
+            None => result.push(ch),
+        }
+    }
+    result
+}
+
+/// Compare two strings by their pinyin representation.
+fn compare_pinyin(a: &str, b: &str) -> Ordering {
+    to_pinyin_for_cmp(a).cmp(&to_pinyin_for_cmp(b))
 }
 
 fn value_ref_to_js_string<'cx>(
@@ -153,9 +181,15 @@ fn execute_sqls<'cx>(cx: &mut Cx<'cx>, ptr: f64, sqls: Handle<JsArray>) -> JsRes
 
     let mut value: Option<Handle<JsValue>> = None;
     for (i, sql) in stmts.iter().enumerate() {
-        let Ok(mut stmt) = conn.prepare(sql) else {
-            let err_msg = cx.string(format!("Failed to prepare SQL statement: {}", sql));
-            return cx.throw(err_msg);
+        let mut stmt = match conn.prepare(sql) {
+            Ok(s) => s,
+            Err(e) => {
+                let err_msg = cx.string(format!(
+                    "Failed to prepare SQL statement: {} - SQL: {}",
+                    e, sql
+                ));
+                return cx.throw(err_msg);
+            }
         };
         if i != stmts.len() - 1 {
             // For all statements except the last one, we just execute them without fetching results
