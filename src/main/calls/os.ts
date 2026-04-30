@@ -86,11 +86,11 @@ registerCallHandler<[string], void>("os.navigateExternal", (event, url) => {
 });
 
 registerCallHandler<[string], void>("os.shellOpen", (event, path) => {
-  shell.openPath(path);
+  shell.openPath(normalizePath(path));
 });
 
 registerCallHandler<[string], void>("os.shellExplor", (event, path) => {
-  shell.showItemInFolder(path);
+  shell.showItemInFolder(normalizePath(path));
 });
 
 let preventSystemSleepBlocker: null | number = null,
